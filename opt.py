@@ -1,4 +1,5 @@
 import argparse
+from xmlrpc.client import Boolean
 
 def get_opts():
     parser = argparse.ArgumentParser()
@@ -7,7 +8,7 @@ def get_opts():
                         default='/home/ubuntu/data/nerf_example_data/nerf_synthetic/lego',
                         help='root directory of dataset')
     parser.add_argument('--dataset_name', type=str, default='blender',
-                        choices=['blender', 'llff'],
+                        choices=['blender', 'llff', 'rgbd'],
                         help='which dataset to train/val')
     parser.add_argument('--img_wh', nargs="+", type=int, default=[800, 800],
                         help='resolution (img_w, img_h) of the image')
@@ -76,5 +77,25 @@ def get_opts():
 
     parser.add_argument('--exp_name', type=str, default='exp',
                         help='experiment name')
+    ##########################
+    #### params for depth ####
+    parser.add_argument('--use_sdf', default=False, type=bool)
+    parser.add_argument('--truncation', type=float, default=0.05)
 
+    parser.add_argument('--color_weight', type=float, default=1.0)
+    parser.add_argument('--depth_weight', type=float, default=0.1)
+    parser.add_argument('--freespace_weight', type=float, default=10.0)
+    parser.add_argument('--truncation_weight', type=float, default=6000.0)
+
+    ##########################
+    #### params for nerf-w ###
+    parser.add_argument('--use_appearance_embedding', type=bool, default=True)
+
+    ##########################
+    #### pose refinement  ####
+    parser.add_argument('--use_deformation_field', type=bool, default=False)
+
+    ##########################
+    #### test train       ####
+    parser.add_argument('--test_train', type=bool, default=False)
     return parser.parse_args()
