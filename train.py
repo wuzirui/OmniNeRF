@@ -1,4 +1,5 @@
 import os
+import numpy as np
 
 from pytorch_lightning.accelerators import accelerator
 from opt import get_opts
@@ -180,4 +181,5 @@ def main(hparams):
 
 if __name__ == '__main__':
     hparams = get_opts()
+    print(hparams)
     main(hparams)

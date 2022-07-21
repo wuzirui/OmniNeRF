@@ -101,7 +101,8 @@ def render_rays(models,
                 weights: (N_rays, N_samples_): weights of each sample
         """
         N_samples_ = xyz.shape[1]
-        xyz_ = rearrange(xyz, 'n1 n2 c -> (n1 n2) c') # (N_rays*N_samples_, 3)
+        xyz_ = rearrange(xyz, 'n1 n2 c -> (n1 n2) c')
+        # (N_rays * N_samples_, 3)
 
         # Perform model inference to get rgb and raw sigma
         B = xyz_.shape[0]
@@ -115,7 +116,7 @@ def render_rays(models,
             sigmas = rearrange(out, '(n1 n2) 1 -> n1 n2', n1=N_rays, n2=N_samples_)
         else: # infer rgb and sigma and others
             dir_embedded_ = repeat(dir_embedded, 'n1 c -> (n1 n2) c', n2=N_samples_)
-                            # (N_rays*N_samples_, embed_dir_channels)
+            # (N_rays * N_samples_, embed_dir_channels)
             for i in range(0, B, chunk):
                 xyz_embedded = embedding_xyz(xyz_[i:i+chunk])
                 xyzdir_embedded = torch.cat([xyz_embedded,
