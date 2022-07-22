@@ -69,9 +69,11 @@ class RGBDDatset(Dataset):
         for i, (image_path, depth_path) in enumerate(zip(self.image_paths, self.depth_paths)):
             rgb = Image.open(image_path).convert('RGB')
             depth = Image.open(depth_path)
+            # rgb = self.image_transform(rgb) \
             rgb = self.image_transform(rgb.resize(self.img_wh, Image.LANCZOS)) \
                       .view(3, -1) \
                       .permute(1, 0)
+            # depth = self.image_transform(depth) \
             depth = self.image_transform(depth.resize(self.img_wh, Image.LANCZOS))\
                         .view(1, -1) \
                         .permute(1, 0)
@@ -85,6 +87,8 @@ class RGBDDatset(Dataset):
             self.all_rgbs = torch.cat(self.all_rgbs, dim=0)  # (N * H * W, 3)
             self.all_depths = torch.cat(self.all_depths, dim=0).float()
             # (N * H * W, 1)
+            assert self.all_rgbs.shape == (self.n_images * self.img_wh[0] * self.img_wh[1], 3), \
+                f"RGB shape is {self.all_rgbs.shape}, expected {(self.n_images * self.img_wh[0] * self.img_wh[1], 3)}"
         else:
             self.all_rgbs = torch.stack(self.all_rgbs, dim=0)  # (N, H * W, 3)
             self.all_depths = torch.stack(self.all_depths, dim=0).float()
@@ -120,7 +124,7 @@ class RGBDDatset(Dataset):
 
             # ray format: (H * W, 8), foreach ray: 
             # origin(3), direction(3), near bound(1), far bound(1)
-            near, far = 0, 2
+            near, far = 0, 1
             self.all_rays += [torch.cat([
                 rays_o, rays_d,
                 near * torch.ones_like(rays_o[:, :1]),

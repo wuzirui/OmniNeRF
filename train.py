@@ -103,9 +103,9 @@ class NeRFSystem(LightningModule):
 
     def configure_optimizers(self):
         self.optimizer = get_optimizer(self.hparams, self.models)
-        # scheduler = get_scheduler(self.hparams, self.optimizer)
-        # return [self.optimizer], [scheduler]
-        return [self.optimizer], ExponentialLR(self.optimizer, gamma=0.1)
+        scheduler = get_scheduler(self.hparams, self.optimizer)
+        return [self.optimizer], [scheduler]
+        # return [self.optimizer]
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
@@ -150,6 +150,10 @@ class NeRFSystem(LightningModule):
                 self.log('train/truncation_loss_coarse', tr_coarse)
 
         return loss
+    
+    def training_step_end(self, step_output):
+        
+        return super().training_step_end(step_output)
 
     def validation_step(self, batch, batch_nb):
         if self.use_sdf:
@@ -194,7 +198,7 @@ class NeRFSystem(LightningModule):
         mean_psnr = torch.stack([x['val/psnr'] for x in outputs]).mean()
 
         self.log('val/loss', mean_loss)
-        self.log('val/psnr', mean_psnr, prog_bar=True)
+        self.log('val/psnr', mean_psnr)
 
 
 def main(hparams):
