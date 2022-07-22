@@ -57,7 +57,7 @@ def get_opts():
                         help='weight decay')
     parser.add_argument('--lr_scheduler', type=str, default='steplr',
                         help='scheduler type',
-                        choices=['steplr', 'cosine', 'poly'])
+                        choices=['steplr', 'cosine', 'poly', 'exp'])
     #### params for warmup, only applied when optimizer == 'sgd' or 'adam'
     parser.add_argument('--warmup_multiplier', type=float, default=1.0,
                         help='lr is multiplied by this factor after --warmup_epochs')
@@ -82,8 +82,8 @@ def get_opts():
     parser.add_argument('--use_sdf', default=False, type=bool)
     parser.add_argument('--truncation', type=float, default=0.05)
 
-    parser.add_argument('--color_weight', type=float, default=1.0)
-    parser.add_argument('--depth_weight', type=float, default=0.1)
+    parser.add_argument('--color_weight', type=float, default=0.1)
+    parser.add_argument('--depth_weight', type=float, default=0.0)
     parser.add_argument('--freespace_weight', type=float, default=10.0)
     parser.add_argument('--truncation_weight', type=float, default=6000.0)
 

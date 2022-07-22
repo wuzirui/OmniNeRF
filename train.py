@@ -103,8 +103,9 @@ class NeRFSystem(LightningModule):
 
     def configure_optimizers(self):
         self.optimizer = get_optimizer(self.hparams, self.models)
-        scheduler = get_scheduler(self.hparams, self.optimizer)
-        return [self.optimizer], [scheduler]
+        # scheduler = get_scheduler(self.hparams, self.optimizer)
+        # return [self.optimizer], [scheduler]
+        return [self.optimizer], ExponentialLR(self.optimizer, gamma=0.1)
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,

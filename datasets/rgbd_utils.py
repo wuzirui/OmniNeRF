@@ -27,8 +27,8 @@ class RGBDDatset(Dataset):
         self.pose_path = os.path.join(root_dir, "poses.txt")
         self.focal_path = os.path.join(root_dir, "focal.txt")
         assert os.path.exists(self.pose_path), "pose file not found"
-        self.image_paths.sort()
-        self.depth_paths.sort()
+        self.image_paths = sorted(self.image_paths, key=lambda x: int(x.split('img')[-1].split('.')[0]))
+        self.depth_paths = sorted(self.depth_paths, key=lambda x: int(x.split('depth')[-1].split('.')[0]))
         assert len(self.image_paths) == len(self.depth_paths), "Number of images and depths must be equal"
         print("Found %d images with depths" % len(self.image_paths))
         self.read_data()
@@ -90,15 +90,14 @@ class RGBDDatset(Dataset):
             self.all_depths = torch.stack(self.all_depths, dim=0).float()
             # (N, H * W, 1)
 
-        self.bounds = torch.tensor(self.bounds, dtype=torch.float32)
-        near = self.bounds.min()
-        scale_factor = near * 0.75
-        # See https://github.com/bmild/nerf/issues/34
-        # 0.75 is the default parameter to scale the nearest depth a little more than 1
-        self.all_depths = np.array(self.all_depths) / scale_factor
-        self.poses[..., 3] /= scale_factor
+        self.bounds = torch.tensor(self.bounds, dtype=torch.float32) / 1000.0
+        self.all_depths = np.array(self.all_depths) / 1000.0
+        # scale depth to meters
+        scale_factor = 0.25
+        self.all_depths *= scale_factor
+        self.poses[..., 3] *= scale_factor
 
-        self.bounds /= near
+        self.bounds *= scale_factor
 
         print(f"done loading images")
         print(f"precomputing rays")
@@ -121,7 +120,7 @@ class RGBDDatset(Dataset):
 
             # ray format: (H * W, 8), foreach ray: 
             # origin(3), direction(3), near bound(1), far bound(1)
-            near, far = self.bounds.min(), min(8 * near, self.bounds.max())
+            near, far = 0, 2
             self.all_rays += [torch.cat([
                 rays_o, rays_d,
                 near * torch.ones_like(rays_o[:, :1]),
