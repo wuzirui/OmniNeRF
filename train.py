@@ -33,7 +33,9 @@ class NeRFSystem(LightningModule):
     def __init__(self, hparams):
         super().__init__()
         self.save_hyperparameters(hparams)
-
+        self.decay_gamma = hparams.decay_gamma
+        self.lr_decay = 250
+        self.lr_init = hparams.lr
         if hparams.use_sdf:
             self.use_sdf = True
             self.loss = loss_dict['rgbd'](hparams.color_weight,
@@ -96,16 +98,17 @@ class NeRFSystem(LightningModule):
             kwargs['val_num'] = self.hparams.num_gpus
         if self.hparams.dataset_name == 'rgbd' and self.hparams.test_train:
             self.train_dataset = dataset(split='test_train', **kwargs)
-            self.val_dataset = dataset(split='val', max_val_imgs=1, **kwargs)
+            self.val_dataset = dataset(split='val', max_val_imgs=5, **kwargs)
         else:
             self.train_dataset = dataset(split='train', **kwargs)
             self.val_dataset = dataset(split='val', **kwargs)
 
     def configure_optimizers(self):
         self.optimizer = get_optimizer(self.hparams, self.models)
-        scheduler = get_scheduler(self.hparams, self.optimizer)
-        return [self.optimizer], [scheduler]
-        # return [self.optimizer]
+        # scheduler = get_scheduler(self.hparams, self.optimizer)
+        # return [self.optimizer], [scheduler]
+        self.scheduler = get_scheduler(self.hparams, self.optimizer)
+        return [self.optimizer]
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
@@ -136,12 +139,13 @@ class NeRFSystem(LightningModule):
             typ = 'fine' if 'rgb_fine' in results else 'coarse'
             psnr_rgb = psnr(results[f'rgb_{typ}'], rgbs)
 
-        self.log('lr', get_learning_rate(self.optimizer))
+        self.log('lr', get_learning_rate(self.optimizer), prog_bar=True)
         self.log('train/loss', loss)
         self.log('train/psnr_rgb', psnr_rgb, prog_bar=True)
         if self.use_sdf:
             self.log('train/color_loss_fine', color_fine, prog_bar=True)
             self.log('train/depth_loss_fine', depth_fine)
+            self.logger.experiment.add_histogram('train/sdf_fine', results['sigmas_fine'], global_step=self.current_epoch)
             if fs_fine != -1:
                 self.log('train/freespace_loss_fine', fs_fine)
                 self.log('train/truncation_loss_fine', tr_fine)
@@ -149,11 +153,9 @@ class NeRFSystem(LightningModule):
                 self.log('train/freespace_loss_coarse', fs_coarse)
                 self.log('train/truncation_loss_coarse', tr_coarse)
 
+        self.batch_nb = batch_nb
+        self.scheduler.step()       # update learning rate
         return loss
-    
-    def training_step_end(self, step_output):
-        
-        return super().training_step_end(step_output)
 
     def validation_step(self, batch, batch_nb):
         if self.use_sdf:
@@ -220,12 +222,13 @@ def main(hparams):
                       resume_from_checkpoint=hparams.ckpt_path,
                       logger=logger,
                       enable_model_summary=False,
-                      accelerator='auto',
+                      accelerator='gpu',
                       devices=hparams.num_gpus,
                       num_sanity_val_steps=1,
                       benchmark=True,
                       profiler="simple" if hparams.num_gpus==1 else None,
-                      strategy=DDPPlugin(find_unused_parameters=False) if hparams.num_gpus>1 else None)
+    )
+                    #   strategy=DDPPlugin(find_unused_parameters=False) if hparams.num_gpus>1 else None)
 
     trainer.fit(system)
 

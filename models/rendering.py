@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from einops import rearrange, reduce, repeat
 
 __all__ = ['render_rays']
@@ -183,6 +184,7 @@ def render_rays(models,
         results[f'weights_{typ}'] = weights
         results[f'opacity_{typ}'] = weights_sum
         results[f'z_vals_{typ}'] = z_vals
+        results[f'sigmas_{typ}'] = sigmas
         if test_time and typ == 'coarse' and 'fine' in models:
             return
 
