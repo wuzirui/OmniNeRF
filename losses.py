@@ -49,44 +49,36 @@ class SDFLoss(nn.Module):
             gt_depth: (batch_size, 1)
         """
         gt_depth = gt_depth[:, None]
-        front_mask, back_mask, sdf_mask, freespace_weight, sdf_weight = get_gt_sdf_masks(z_vals, gt_depth, self.truncation)
+        front_mask, back_mask, sdf_mask = get_gt_sdf_masks(z_vals, gt_depth, self.truncation)
         
         gt_sdf = get_gt_sdf(z_vals, gt_depth, self.truncation, front_mask, back_mask, sdf_mask)
 
-        # calculate losses
-        freespace_loss = self.img2mse(predicted_sdf * (front_mask + back_mask), 
-                                      gt_sdf * (front_mask + back_mask))
-        sdf_loss = self.img2mse(predicted_sdf * sdf_mask,
-                                gt_sdf * sdf_mask)
-
-        return freespace_weight * freespace_loss, sdf_weight * sdf_loss
+        return self.img2mse(predicted_sdf, gt_sdf)
 
 class RGBDLoss(nn.Module):
-    def __init__(self, color_coef=0.1, depth_coef=0.1, freespace_coef=10, trunc_coef=6000, truncation=0.05):
+    def __init__(self, color_coef=0.1, depth_coef=0.1, sdf_coef=10, truncation=0.05):
         super().__init__()
         self.rgb_loss = ColorLoss(color_coef)
         self.depth_loss = DepthLoss(depth_coef)
         self.sdf_loss = SDFLoss(truncation)
         self.color_coef = color_coef
         self.depth_coef = depth_coef
-        self.freespace_coef = freespace_coef
-        self.trunc_coef = trunc_coef
+        self.sdf_coef = sdf_coef
 
     def forward(self, input_result, gt_rgb, gt_depth):
         rgb_loss = self.rgb_loss(input_result, gt_rgb)
         depth_loss = self.depth_loss(input_result, gt_depth)
-        fs_coarse, sdf_coarse = self.sdf_loss(input_result['z_vals_coarse'],
+        sdf_coarse = self.sdf_loss(input_result['z_vals_coarse'],
                                               input_result['sigmas_coarse'],
                                               gt_depth)
-        loss = rgb_loss * self.color_coef + depth_loss * self.depth_coef + \
-                fs_coarse * self.freespace_coef + sdf_coarse * self.trunc_coef
-        fs_fine, sdf_fine = -1, -1
+        loss = rgb_loss + depth_loss + sdf_coarse * self.sdf_coef
+        sdf_fine = -1
         if 'z_vals_fine' in input_result:
-            fs_fine, sdf_fine = self.sdf_loss(input_result['z_vals_fine'],
+            sdf_fine = self.sdf_loss(input_result['z_vals_fine'],
                                               input_result['sigmas_fine'],
                                               gt_depth)
-            loss += fs_fine * self.freespace_coef + sdf_fine * self.trunc_coef
-        return loss, rgb_loss, depth_loss, fs_coarse, sdf_coarse, fs_fine, sdf_fine
+            loss += sdf_fine * self.sdf_coef
+        return loss, rgb_loss, depth_loss, sdf_coarse, sdf_fine
         
 
 loss_dict = {'color': ColorLoss, 'rgbd': RGBDLoss}

@@ -12,6 +12,7 @@ from datasets import dataset_dict
 # models
 from models.nerf import *
 from models.rendering import *
+from models.sdf_utils import *
 
 # optimizer, scheduler, visualization
 from utils import *
@@ -40,8 +41,7 @@ class NeRFSystem(LightningModule):
             self.use_sdf = True
             self.loss = loss_dict['rgbd'](hparams.color_weight,
                                           hparams.depth_weight,
-                                          hparams.freespace_weight,
-                                          hparams.truncation_weight,
+                                          hparams.sdf_weight,
                                           hparams.truncation)
         else:
             self.use_sdf = False
@@ -96,12 +96,16 @@ class NeRFSystem(LightningModule):
         if self.hparams.dataset_name == 'llff':
             kwargs['spheric_poses'] = self.hparams.spheric_poses
             kwargs['val_num'] = self.hparams.num_gpus
+        if self.hparams.max_val_images is not None:
+            max_val_images = self.hparams.max_val_images
+        else:
+            max_val_images = None
         if self.hparams.dataset_name == 'rgbd' and self.hparams.test_train:
             self.train_dataset = dataset(split='test_train', **kwargs)
-            self.val_dataset = dataset(split='val', max_val_imgs=5, **kwargs)
+            self.val_dataset = dataset(split='val', max_val_imgs=max_val_images, **kwargs)
         else:
             self.train_dataset = dataset(split='train', **kwargs)
-            self.val_dataset = dataset(split='val', **kwargs)
+            self.val_dataset = dataset(split='val', max_val_images=max_val_images,**kwargs)
 
     def configure_optimizers(self):
         self.optimizer = get_optimizer(self.hparams, self.models)
@@ -132,8 +136,8 @@ class NeRFSystem(LightningModule):
         else:
             rays, rgbs, depths = batch['rays'], batch['rgbs'], batch['depths']
             results = self(rays)
-            loss, color_fine, depth_fine, fs_coarse, tr_coarse, \
-                fs_fine, tr_fine = self.loss(results, rgbs, depths)
+            loss, color_fine, depth_fine, sdf_coarse, \
+                sdf_fine = self.loss(results, rgbs, depths)
 
         with torch.no_grad():
             typ = 'fine' if 'rgb_fine' in results else 'coarse'
@@ -146,12 +150,10 @@ class NeRFSystem(LightningModule):
             self.log('train/color_loss_fine', color_fine, prog_bar=True)
             self.log('train/depth_loss_fine', depth_fine)
             self.logger.experiment.add_histogram('train/sdf_fine', results['sigmas_fine'], global_step=self.current_epoch)
-            if fs_fine != -1:
-                self.log('train/freespace_loss_fine', fs_fine)
-                self.log('train/truncation_loss_fine', tr_fine)
+            if sdf_fine != -1:
+                self.log('train/sdf_loss_fine', sdf_fine)
             else:
-                self.log('train/freespace_loss_coarse', fs_coarse)
-                self.log('train/truncation_loss_coarse', tr_coarse)
+                self.log('train/sdf_loss_coarse', sdf_coarse)
 
         self.batch_nb = batch_nb
         self.scheduler.step()       # update learning rate
@@ -167,15 +169,23 @@ class NeRFSystem(LightningModule):
         if self.use_sdf:
             depths = depths.squeeze() # (H*W, 1)
             results = self(rays)
-            loss, rgb_loss, depth_loss, fs_c, tr_c, fs_f, tr_f = \
+            loss, rgb_loss, depth_loss, sdf_c, sdf_f = \
                 self.loss(results, rgbs, depths)
             log = {
                 'val/loss': loss,
                 'val/rgb_loss': rgb_loss,
                 'val/depth_loss': depth_loss,
-                'val/freespace_loss': fs_f if fs_f != -1 else fs_c,
-                'val/truncation_loss': tr_f if tr_f != -1 else tr_c,
+                'val/sdf_loss': sdf_f if sdf_f != -1 else sdf_c,
             }
+            predicted_sdf = results['sigmas_fine']
+            index = torch.randint(0, predicted_sdf.shape[0], (1,))
+            predicted_sdf = predicted_sdf[index].cpu()
+            z_vals = results['z_vals_fine'][index].cpu()
+            front_mask, back_mask, sdf_mask = get_gt_sdf_masks(z_vals, depths[index].cpu(),
+                                                               self.hparams.truncation)
+            gt_sdf = get_gt_sdf(z_vals, depths[index].cpu(), self.hparams.truncation, front_mask, back_mask, sdf_mask)
+            fig = plot_sdf_gt_with_predicted(z_vals, gt_sdf, predicted_sdf, depths[index].cpu(), self.hparams.truncation)
+            self.logger.experiment.add_image('sdf_gt_predicted', fig, global_step=self.global_step)
         else:
             results = self(rays)
             log = {'val/loss': self.loss(results, rgbs)}
@@ -227,6 +237,7 @@ def main(hparams):
                       num_sanity_val_steps=1,
                       benchmark=True,
                       profiler="simple" if hparams.num_gpus==1 else None,
+                      val_check_interval=0.5,
     )
                     #   strategy=DDPPlugin(find_unused_parameters=False) if hparams.num_gpus>1 else None)
 

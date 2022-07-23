@@ -134,3 +134,4 @@ dmypy.json
 # model log
 logs/
 ckpts/
+data/

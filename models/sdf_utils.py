@@ -1,5 +1,10 @@
+import io
 from math import trunc
 import torch
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+import numpy as np
+from PIL import Image
 
 def get_gt_sdf_masks(z_vals, gt_depth, truncation):
     """
@@ -7,6 +12,11 @@ def get_gt_sdf_masks(z_vals, gt_depth, truncation):
         z_vals: (batch_size, n_samples)
         gt_depth: (batch_size, 1)
         truncation: float
+    Returns:
+        front_mask: (batch_size, n_samples), 1 if point is in front (z < depth - tr)
+        back_mask: (batch_size, n_samples), 1 if point is in back (z > depth + tr)
+        sdf_mask: (batch_size, n_samples), 1 if point is in truncation range
+                  i.e. (z - depth) < tr < (z - depth) > -tr
     """
     # before truncation 
     front_mask = torch.where(z_vals < (gt_depth - truncation), 
@@ -18,14 +28,7 @@ def get_gt_sdf_masks(z_vals, gt_depth, truncation):
                             torch.zeros_like(z_vals))
     # sdf region
     sdf_mask = (1.0 - front_mask) * (1.0 - back_mask)
-
-    # calculate weights for each loss
-    freespace_samples = torch.count_nonzero(front_mask)
-    sdf_samples = torch.count_nonzero(sdf_mask)
-    n_samples = freespace_samples + sdf_samples
-    freespace_weight = sdf_samples / n_samples
-    sdf_weight = freespace_samples / n_samples
-    return front_mask, back_mask, sdf_mask, freespace_weight, sdf_weight
+    return front_mask, back_mask, sdf_mask
 
 def get_gt_sdf(z_vals, gt_depth, truncation, front_mask, back_mask, sdf_mask):
     """
@@ -34,7 +37,32 @@ def get_gt_sdf(z_vals, gt_depth, truncation, front_mask, back_mask, sdf_mask):
         gt_depth: (batch_size, 1)
         truncation: float
     """
-    fs_sdf = -front_mask + back_mask                          # freespace
-    tr_sdf = sdf_mask * (z_vals - gt_depth) / truncation      # sdf
+    fs_sdf = (-front_mask + back_mask) * truncation
+    tr_sdf = sdf_mask * (z_vals - gt_depth)
     return fs_sdf + tr_sdf
 
+def plot_sdf_gt_with_predicted(z_vals, gt_sdf, predicted_sdf, gt_depth, truncation):
+    """
+    Inputs:
+        z_vals: (1, n_samples)
+        gt_sdf: (1, n_samples)
+        predicted_sdf: (1, n_samples)
+    """
+    plt.figure(figsize=(6, 6))
+    z_vals = z_vals.detach().numpy().reshape(-1)
+    gt_sdf = gt_sdf.detach().numpy().reshape(-1)
+    predicted_sdf = predicted_sdf.detach().numpy().reshape(-1)
+    smoothed = np.convolve(predicted_sdf, np.ones((20,))/20, mode='same')
+    plt.plot(z_vals, gt_sdf, label='gt_sdf')
+    plt.plot(z_vals, predicted_sdf, label='predicted_sdf')
+    plt.plot(z_vals, smoothed, label='smoothed')
+    plt.plot(z_vals, torch.zeros_like(z_vals), '--')
+    plt.plot(gt_depth * np.ones_like(z_vals), np.linspace(-truncation, truncation, z_vals.shape[0]), '--', label='gt_depth')
+    plt.legend()
+    canvas = FigureCanvasAgg(plt.gcf())
+    canvas.draw()
+    w, h = canvas.get_width_height()
+    buf = np.fromstring(canvas.tostring_argb(), dtype='uint8').reshape(h, w, 4)
+    buf = np.roll(buf, 3, axis=2)
+    image = Image.frombytes('RGBA', (w, h), buf.tostring())
+    return np.asarray(image)[..., :3].transpose(2, 0, 1)
