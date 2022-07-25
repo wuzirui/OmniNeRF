@@ -41,7 +41,8 @@ class NeRFSystem(LightningModule):
             self.use_sdf = True
             self.loss = loss_dict['rgbd'](hparams.color_weight,
                                           hparams.depth_weight,
-                                          hparams.sdf_weight,
+                                          hparams.freespace_weight,
+                                          hparams.truncation_weight,
                                           hparams.truncation)
         else:
             self.use_sdf = False
@@ -136,8 +137,8 @@ class NeRFSystem(LightningModule):
         else:
             rays, rgbs, depths = batch['rays'], batch['rgbs'], batch['depths']
             results = self(rays)
-            loss, color_fine, depth_fine, sdf_coarse, \
-                sdf_fine = self.loss(results, rgbs, depths)
+            loss, color_fine, depth_fine, fs_coarse, fs_fine, tr_coarse, \
+                tr_fine = self.loss(results, rgbs, depths)
 
         with torch.no_grad():
             typ = 'fine' if 'rgb_fine' in results else 'coarse'
@@ -150,10 +151,12 @@ class NeRFSystem(LightningModule):
             self.log('train/color_loss_fine', color_fine, prog_bar=True)
             self.log('train/depth_loss_fine', depth_fine)
             self.logger.experiment.add_histogram('train/sdf_fine', results['sigmas_fine'], global_step=self.current_epoch)
-            if sdf_fine != -1:
-                self.log('train/sdf_loss_fine', sdf_fine)
+            if fs_fine != -1:
+                self.log('train/freespace_loss_fine', fs_fine)
+                self.log('train/truncation_loss_fine', fs_fine)
             else:
-                self.log('train/sdf_loss_coarse', sdf_coarse)
+                self.log('train/freespace_loss_coarse', fs_coarse)
+                self.log('train/truncation_loss_coarse', fs_coarse)
 
         self.batch_nb = batch_nb
         self.scheduler.step()       # update learning rate
@@ -169,13 +172,14 @@ class NeRFSystem(LightningModule):
         if self.use_sdf:
             depths = depths.squeeze() # (H*W, 1)
             results = self(rays)
-            loss, rgb_loss, depth_loss, sdf_c, sdf_f = \
+            loss, rgb_loss, depth_loss, fs_c, fs_f, tr_c, tr_f = \
                 self.loss(results, rgbs, depths)
             log = {
                 'val/loss': loss,
                 'val/rgb_loss': rgb_loss,
                 'val/depth_loss': depth_loss,
-                'val/sdf_loss': sdf_f if sdf_f != -1 else sdf_c,
+                'val/fs_loss': fs_f if fs_f != -1 else fs_c,
+                'val/tr_loss': tr_f if tr_f != -1 else tr_c,
             }
             predicted_sdf = results['sigmas_fine']
             index = torch.randint(0, predicted_sdf.shape[0], (1,))

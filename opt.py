@@ -84,7 +84,8 @@ def get_opts():
 
     parser.add_argument('--color_weight', type=float, default=1.0)
     parser.add_argument('--depth_weight', type=float, default=0.1)
-    parser.add_argument('--sdf_weight', type=float, default=20.0)
+    parser.add_argument('--freespace_weight', type=float, default=10.0)
+    parser.add_argument('--truncation_weight', type=float, default=6000.0)
 
     ##########################
     #### params for nerf-w ###

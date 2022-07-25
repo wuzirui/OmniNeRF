@@ -37,8 +37,8 @@ def get_gt_sdf(z_vals, gt_depth, truncation, front_mask, back_mask, sdf_mask):
         gt_depth: (batch_size, 1)
         truncation: float
     """
-    fs_sdf = (-front_mask + back_mask) * truncation
-    tr_sdf = sdf_mask * (z_vals - gt_depth)
+    fs_sdf = (front_mask - back_mask) * torch.ones_like(z_vals)
+    tr_sdf = sdf_mask * (gt_depth - z_vals) / truncation
     return fs_sdf + tr_sdf
 
 def plot_sdf_gt_with_predicted(z_vals, gt_sdf, predicted_sdf, gt_depth, truncation):
@@ -52,11 +52,9 @@ def plot_sdf_gt_with_predicted(z_vals, gt_sdf, predicted_sdf, gt_depth, truncati
     z_vals = z_vals.detach().numpy().reshape(-1)
     gt_sdf = gt_sdf.detach().numpy().reshape(-1)
     predicted_sdf = predicted_sdf.detach().numpy().reshape(-1)
-    smoothed = np.convolve(predicted_sdf, np.ones((20,))/20, mode='same')
     plt.plot(z_vals, gt_sdf, label='gt_sdf')
     plt.plot(z_vals, predicted_sdf, label='predicted_sdf')
-    plt.plot(z_vals, smoothed, label='smoothed')
-    plt.plot(z_vals, torch.zeros_like(z_vals), '--')
+    plt.plot(z_vals, np.zeros_like(z_vals), '--')
     plt.plot(gt_depth * np.ones_like(z_vals), np.linspace(-truncation, truncation, z_vals.shape[0]), '--', label='gt_depth')
     plt.legend()
     canvas = FigureCanvasAgg(plt.gcf())
