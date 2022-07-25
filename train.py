@@ -241,7 +241,7 @@ def main(hparams):
                       num_sanity_val_steps=1,
                       benchmark=True,
                       profiler="simple" if hparams.num_gpus==1 else None,
-                      val_check_interval=0.5,
+                      val_check_interval=hparams.val_check_interval,
     )
                     #   strategy=DDPPlugin(find_unused_parameters=False) if hparams.num_gpus>1 else None)
 

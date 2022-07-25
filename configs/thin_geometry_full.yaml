@@ -1,0 +1,18 @@
+dataset_name: rgbd
+root_dir: ../thin_geometry
+N_samples: 512
+N_importance: 64
+img_wh: [160, 120]
+num_epochs: 30
+batch_size: 512
+optimizer: adam
+lr: 7e-4
+lr_scheduler: exp
+decay_gamma: 0.9999
+exp_name: exp/thin_geometry/
+use_sdf: True
+color_weight: 5
+depth_weight: 0.1
+freespace_weight: 1e9
+truncation_weight: 1e9
+val_check_interval: 0.1

@@ -1,8 +1,9 @@
-import argparse
+import configargparse
 from xmlrpc.client import Boolean
 
 def get_opts():
-    parser = argparse.ArgumentParser()
+    parser = configargparse.ArgParser(config_file_parser_class=configargparse.YAMLConfigFileParser)
+    parser.add_argument('--config', is_config_file=True, help='config file path')
 
     parser.add_argument('--root_dir', type=str,
                         default='/home/ubuntu/data/nerf_example_data/nerf_synthetic/lego',
@@ -58,6 +59,7 @@ def get_opts():
     parser.add_argument('--lr_scheduler', type=str, default='steplr',
                         help='scheduler type',
                         choices=['steplr', 'cosine', 'poly', 'exp'])
+    parser.add_argument('--val_check_interval', type=float, default=0.5)
     #### params for warmup, only applied when optimizer == 'sgd' or 'adam'
     parser.add_argument('--warmup_multiplier', type=float, default=1.0,
                         help='lr is multiplied by this factor after --warmup_epochs')
