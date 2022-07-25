@@ -106,7 +106,7 @@ class NeRFSystem(LightningModule):
             self.val_dataset = dataset(split='val', max_val_imgs=max_val_images, **kwargs)
         else:
             self.train_dataset = dataset(split='train', **kwargs)
-            self.val_dataset = dataset(split='val', max_val_images=max_val_images,**kwargs)
+            self.val_dataset = dataset(split='val', max_val_imgs=max_val_images,**kwargs)
 
     def configure_optimizers(self):
         self.optimizer = get_optimizer(self.hparams, self.models)
