@@ -189,7 +189,7 @@ class NeRFSystem(LightningModule):
                                                                self.hparams.truncation)
             gt_sdf = get_gt_sdf(z_vals, depths[index].cpu(), self.hparams.truncation, front_mask, back_mask, sdf_mask)
             fig = plot_sdf_gt_with_predicted(z_vals, gt_sdf, predicted_sdf, depths[index].cpu(), self.hparams.truncation)
-            self.logger.experiment.add_image('sdf_gt_predicted', fig, global_step=self.global_step)
+            self.logger.experiment.add_image(f'valsdf/sampled_{batch_nb}', fig, global_step=self.global_step)
         else:
             results = self(rays)
             log = {'val/loss': self.loss(results, rgbs)}
