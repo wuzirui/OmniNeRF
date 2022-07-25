@@ -63,4 +63,5 @@ def plot_sdf_gt_with_predicted(z_vals, gt_sdf, predicted_sdf, gt_depth, truncati
     buf = np.fromstring(canvas.tostring_argb(), dtype='uint8').reshape(h, w, 4)
     buf = np.roll(buf, 3, axis=2)
     image = Image.frombytes('RGBA', (w, h), buf.tostring())
+    plt.close()
     return np.asarray(image)[..., :3].transpose(2, 0, 1)
