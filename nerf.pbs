@@ -13,7 +13,7 @@ module load cuda/10.2.89
 
 python train.py \
    --dataset_name rgbd \
-   --root_dir /Downloads/neural_rgbd_data/thin_geometry \
+   --root_dir neural_rgbd_data/thin_geometry \
    --N_importance 64 --img_wh 400 400 --noise_std 0 \
    --num_epochs 16 --batch_size 1024 \
    --optimizer adam --lr 5e-4 \
