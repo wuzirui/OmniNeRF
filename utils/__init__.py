@@ -3,7 +3,7 @@ import torch
 from torch.optim import SGD, Adam
 import torch_optimizer as optim
 # scheduler
-from torch.optim.lr_scheduler import CosineAnnealingLR, MultiStepLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, MultiStepLR, ExponentialLR, LambdaLR
 from .warmup_scheduler import GradualWarmupScheduler
 
 from .visualization import *
@@ -51,6 +51,8 @@ def get_scheduler(hparams, optimizer):
     elif hparams.lr_scheduler == 'poly':
         scheduler = LambdaLR(optimizer, 
                              lambda epoch: (1-epoch/hparams.num_epochs)**hparams.poly_exp)
+    elif hparams.lr_scheduler == 'exp':
+        scheduler = ExponentialLR(optimizer, gamma=hparams.decay_gamma)
     else:
         raise ValueError('scheduler not recognized!')
 

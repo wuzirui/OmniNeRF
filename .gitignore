@@ -127,3 +127,11 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# env
+.vscode/
+
+# model log
+logs/
+ckpts/
+data/

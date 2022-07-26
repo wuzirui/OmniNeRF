@@ -1,4 +1,5 @@
 import os
+import numpy as np
 
 from pytorch_lightning.accelerators import accelerator
 from opt import get_opts
@@ -11,6 +12,7 @@ from datasets import dataset_dict
 # models
 from models.nerf import *
 from models.rendering import *
+from models.sdf_utils import *
 
 # optimizer, scheduler, visualization
 from utils import *
@@ -32,8 +34,19 @@ class NeRFSystem(LightningModule):
     def __init__(self, hparams):
         super().__init__()
         self.save_hyperparameters(hparams)
-
-        self.loss = loss_dict['color'](coef=1)
+        self.decay_gamma = hparams.decay_gamma
+        self.lr_decay = 250
+        self.lr_init = hparams.lr
+        if hparams.use_sdf:
+            self.use_sdf = True
+            self.loss = loss_dict['rgbd'](hparams.color_weight,
+                                          hparams.depth_weight,
+                                          hparams.freespace_weight,
+                                          hparams.truncation_weight,
+                                          hparams.truncation)
+        else:
+            self.use_sdf = False
+            self.loss = loss_dict['color'](coef=1)
 
         self.embedding_xyz = Embedding(hparams.N_emb_xyz)
         self.embedding_dir = Embedding(hparams.N_emb_dir)
@@ -66,7 +79,9 @@ class NeRFSystem(LightningModule):
                             self.hparams.noise_std,
                             self.hparams.N_importance,
                             self.hparams.chunk, # chunk size is effective in val mode
-                            self.train_dataset.white_back)
+                            self.train_dataset.white_back,
+                            use_sdf=self.hparams.use_sdf
+                            )
 
             for k, v in rendered_ray_chunks.items():
                 results[k] += [v]
@@ -82,13 +97,23 @@ class NeRFSystem(LightningModule):
         if self.hparams.dataset_name == 'llff':
             kwargs['spheric_poses'] = self.hparams.spheric_poses
             kwargs['val_num'] = self.hparams.num_gpus
-        self.train_dataset = dataset(split='train', **kwargs)
-        self.val_dataset = dataset(split='val', **kwargs)
+        if self.hparams.max_val_images is not None:
+            max_val_images = self.hparams.max_val_images
+        else:
+            max_val_images = None
+        if self.hparams.dataset_name == 'rgbd' and self.hparams.test_train:
+            self.train_dataset = dataset(split='test_train', **kwargs)
+            self.val_dataset = dataset(split='val', max_val_imgs=max_val_images, **kwargs)
+        else:
+            self.train_dataset = dataset(split='train', **kwargs)
+            self.val_dataset = dataset(split='val', max_val_imgs=max_val_images,**kwargs)
 
     def configure_optimizers(self):
         self.optimizer = get_optimizer(self.hparams, self.models)
-        scheduler = get_scheduler(self.hparams, self.optimizer)
-        return [self.optimizer], [scheduler]
+        # scheduler = get_scheduler(self.hparams, self.optimizer)
+        # return [self.optimizer], [scheduler]
+        self.scheduler = get_scheduler(self.hparams, self.optimizer)
+        return [self.optimizer]
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
@@ -105,48 +130,91 @@ class NeRFSystem(LightningModule):
                           pin_memory=True)
     
     def training_step(self, batch, batch_nb):
-        rays, rgbs = batch['rays'], batch['rgbs']
-        results = self(rays)
-        loss = self.loss(results, rgbs)
+        if not self.use_sdf:
+            rays, rgbs = batch['rays'], batch['rgbs']
+            results = self(rays)
+            loss = self.loss(results, rgbs)
+        else:
+            rays, rgbs, depths = batch['rays'], batch['rgbs'], batch['depths']
+            results = self(rays)
+            loss, color_fine, depth_fine, fs_coarse, fs_fine, tr_coarse, \
+                tr_fine = self.loss(results, rgbs, depths)
 
         with torch.no_grad():
             typ = 'fine' if 'rgb_fine' in results else 'coarse'
-            psnr_ = psnr(results[f'rgb_{typ}'], rgbs)
+            psnr_rgb = psnr(results[f'rgb_{typ}'], rgbs)
 
-        self.log('lr', get_learning_rate(self.optimizer))
+        self.log('lr', get_learning_rate(self.optimizer), prog_bar=True)
         self.log('train/loss', loss)
-        self.log('train/psnr', psnr_, prog_bar=True)
+        self.log('train/psnr_rgb', psnr_rgb, prog_bar=True)
+        if self.use_sdf:
+            self.log('train/color_loss_fine', color_fine, prog_bar=True)
+            self.log('train/depth_loss_fine', depth_fine)
+            self.logger.experiment.add_histogram('train/sdf_fine', results['sigmas_fine'], global_step=self.current_epoch)
+            if fs_fine != -1:
+                self.log('train/freespace_loss_fine', fs_fine)
+                self.log('train/truncation_loss_fine', fs_fine)
+            else:
+                self.log('train/freespace_loss_coarse', fs_coarse)
+                self.log('train/truncation_loss_coarse', fs_coarse)
 
+        self.batch_nb = batch_nb
+        self.scheduler.step()       # update learning rate
         return loss
 
     def validation_step(self, batch, batch_nb):
-        rays, rgbs = batch['rays'], batch['rgbs']
+        if self.use_sdf:
+            rays, rgbs, depths = batch['rays'], batch['rgbs'], batch['depths']
+        else:
+            rays, rgbs = batch['rays'], batch['rgbs']
         rays = rays.squeeze() # (H*W, 3)
         rgbs = rgbs.squeeze() # (H*W, 3)
-        results = self(rays)
-        log = {'val_loss': self.loss(results, rgbs)}
+        if self.use_sdf:
+            depths = depths.squeeze() # (H*W, 1)
+            results = self(rays)
+            loss, rgb_loss, depth_loss, fs_c, fs_f, tr_c, tr_f = \
+                self.loss(results, rgbs, depths)
+            log = {
+                'val/loss': loss,
+                'val/rgb_loss': rgb_loss,
+                'val/depth_loss': depth_loss,
+                'val/fs_loss': fs_f if fs_f != -1 else fs_c,
+                'val/tr_loss': tr_f if tr_f != -1 else tr_c,
+            }
+            predicted_sdf = results['sigmas_fine']
+            index = torch.randint(0, predicted_sdf.shape[0], (1,))
+            predicted_sdf = predicted_sdf[index].cpu()
+            z_vals = results['z_vals_fine'][index].cpu()
+            front_mask, back_mask, sdf_mask = get_gt_sdf_masks(z_vals, depths[index].cpu(),
+                                                               self.hparams.truncation)
+            gt_sdf = get_gt_sdf(z_vals, depths[index].cpu(), self.hparams.truncation, front_mask, back_mask, sdf_mask)
+            fig = plot_sdf_gt_with_predicted(z_vals, gt_sdf, predicted_sdf, depths[index].cpu(), self.hparams.truncation)
+            self.logger.experiment.add_image(f'valsdf/sampled_{batch_nb}', fig, global_step=self.global_step)
+        else:
+            results = self(rays)
+            log = {'val/loss': self.loss(results, rgbs)}
+
         typ = 'fine' if 'rgb_fine' in results else 'coarse'
     
-        if batch_nb == 0:
-            W, H = self.hparams.img_wh
-            img = results[f'rgb_{typ}'].view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
-            img_gt = rgbs.view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
-            depth = visualize_depth(results[f'depth_{typ}'].view(H, W)) # (3, H, W)
-            stack = torch.stack([img_gt, img, depth]) # (3, 3, H, W)
-            self.logger.experiment.add_images('val/GT_pred_depth',
-                                               stack, self.global_step)
+        W, H = self.hparams.img_wh
+        img = results[f'rgb_{typ}'].view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
+        img_gt = rgbs.view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
+        depth = visualize_depth(results[f'depth_{typ}'].view(H, W)) # (3, H, W)
+        stack = torch.stack([img_gt, img, depth]) # (3, 3, H, W)
+        self.logger.experiment.add_images(f'val/GT_pred_depth_{batch_nb}',
+                                            stack, self.global_step)
 
         psnr_ = psnr(results[f'rgb_{typ}'], rgbs)
-        log['val_psnr'] = psnr_
+        log['val/psnr'] = psnr_
 
         return log
 
     def validation_epoch_end(self, outputs):
-        mean_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
-        mean_psnr = torch.stack([x['val_psnr'] for x in outputs]).mean()
+        mean_loss = torch.stack([x['val/loss'] for x in outputs]).mean()
+        mean_psnr = torch.stack([x['val/psnr'] for x in outputs]).mean()
 
         self.log('val/loss', mean_loss)
-        self.log('val/psnr', mean_psnr, prog_bar=True)
+        self.log('val/psnr', mean_psnr)
 
 
 def main(hparams):
@@ -168,16 +236,19 @@ def main(hparams):
                       resume_from_checkpoint=hparams.ckpt_path,
                       logger=logger,
                       enable_model_summary=False,
-                      accelerator='auto',
+                      accelerator='gpu',
                       devices=hparams.num_gpus,
                       num_sanity_val_steps=1,
                       benchmark=True,
                       profiler="simple" if hparams.num_gpus==1 else None,
-                      strategy=DDPPlugin(find_unused_parameters=False) if hparams.num_gpus>1 else None)
+                      val_check_interval=hparams.val_check_interval,
+    )
+                    #   strategy=DDPPlugin(find_unused_parameters=False) if hparams.num_gpus>1 else None)
 
     trainer.fit(system)
 
 
 if __name__ == '__main__':
     hparams = get_opts()
+    print(hparams)
     main(hparams)

@@ -1,13 +1,15 @@
-import argparse
+import configargparse
+from xmlrpc.client import Boolean
 
 def get_opts():
-    parser = argparse.ArgumentParser()
+    parser = configargparse.ArgParser(config_file_parser_class=configargparse.YAMLConfigFileParser)
+    parser.add_argument('--config', is_config_file=True, help='config file path')
 
     parser.add_argument('--root_dir', type=str,
                         default='/home/ubuntu/data/nerf_example_data/nerf_synthetic/lego',
                         help='root directory of dataset')
     parser.add_argument('--dataset_name', type=str, default='blender',
-                        choices=['blender', 'llff'],
+                        choices=['blender', 'llff', 'rgbd'],
                         help='which dataset to train/val')
     parser.add_argument('--img_wh', nargs="+", type=int, default=[800, 800],
                         help='resolution (img_w, img_h) of the image')
@@ -56,7 +58,8 @@ def get_opts():
                         help='weight decay')
     parser.add_argument('--lr_scheduler', type=str, default='steplr',
                         help='scheduler type',
-                        choices=['steplr', 'cosine', 'poly'])
+                        choices=['steplr', 'cosine', 'poly', 'exp'])
+    parser.add_argument('--val_check_interval', type=float, default=0.5)
     #### params for warmup, only applied when optimizer == 'sgd' or 'adam'
     parser.add_argument('--warmup_multiplier', type=float, default=1.0,
                         help='lr is multiplied by this factor after --warmup_epochs')
@@ -76,5 +79,27 @@ def get_opts():
 
     parser.add_argument('--exp_name', type=str, default='exp',
                         help='experiment name')
+    ##########################
+    #### params for depth ####
+    parser.add_argument('--use_sdf', default=False, type=bool)
+    parser.add_argument('--truncation', type=float, default=0.05)
+
+    parser.add_argument('--color_weight', type=float, default=1.0)
+    parser.add_argument('--depth_weight', type=float, default=0.1)
+    parser.add_argument('--freespace_weight', type=float, default=10.0)
+    parser.add_argument('--truncation_weight', type=float, default=6000.0)
+
+    ##########################
+    #### params for nerf-w ###
+    parser.add_argument('--use_appearance_embedding', type=bool, default=True)
+
+    ##########################
+    #### pose refinement  ####
+    parser.add_argument('--use_deformation_field', type=bool, default=False)
+
+    ##########################
+    #### test train       ####
+    parser.add_argument('--test_train', type=bool, default=False)
+    parser.add_argument('--max_val_images', type=int, default=None)
 
     return parser.parse_args()
