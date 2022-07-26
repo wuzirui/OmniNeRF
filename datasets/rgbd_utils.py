@@ -24,7 +24,7 @@ class RGBDDatset(Dataset):
         ])
         self.image_paths = glob.glob(os.path.join(root_dir, 'images/*.png'))
         self.depth_paths = glob.glob(os.path.join(root_dir, 'depth/*.png'))
-        self.pose_path = os.path.join(root_dir, "poses.txt")
+        self.pose_path = os.path.join(root_dir, "trainval_poses.txt")
         self.focal_path = os.path.join(root_dir, "focal.txt")
         assert os.path.exists(self.pose_path), "pose file not found"
         self.image_paths = sorted(self.image_paths, key=lambda x: int(x.split('img')[-1].split('.')[0]))
@@ -34,8 +34,6 @@ class RGBDDatset(Dataset):
         self.read_data()
     
     def read_data(self):
-        with open(self.focal_path, 'r') as f:
-            self.focal = float(f.readline())
         with open(self.pose_path, 'r') as f:
             self.poses = [np.fromstring(line, sep=' ') for line in f]
             # RGBD dataset has poses already in the form of Twc (camera to world)
@@ -51,7 +49,9 @@ class RGBDDatset(Dataset):
         elif self.split == 'val':
             idx = [i for i in range(len(self.image_paths)) if i % 20 == 0]
             if self.max_val_imgs is not None and len(idx) > self.max_val_imgs:
-                idx = idx[:self.max_val_imgs]
+                perm = np.random.permutation(len(idx))[:self.max_val_imgs]
+                idx = [idx[i] for i in perm]
+                print(f"selected val images = {idx}")
             self.n_images = len(idx)
             print(f"selected {len(idx)} images for validation")
         elif self.split == 'test_train':
@@ -73,6 +73,8 @@ class RGBDDatset(Dataset):
             rgb = self.image_transform(rgb.resize(self.img_wh, Image.LANCZOS)) \
                       .view(3, -1) \
                       .permute(1, 0)
+            depth_scale_factor = self.img_wh[0] / depth.size[0]
+            assert depth_scale_factor == self.img_wh[1] / depth.size[1], "width and height scale ratio must be equal, check depth image and img_wh"
             # depth = self.image_transform(depth) \
             depth = self.image_transform(depth.resize(self.img_wh, Image.LANCZOS))\
                         .view(1, -1) \
@@ -82,6 +84,10 @@ class RGBDDatset(Dataset):
             self.all_rgbs += [rgb]
             self.all_depths += [depth]
             self.bounds += [[bound_min, bound_max]]
+
+        print(f"depth scale factor = {depth_scale_factor}")
+        with open(self.focal_path, 'r') as f:
+            self.focal = float(f.readline()) * depth_scale_factor
 
         if self.split == 'train' or self.split == 'test_train':
             self.all_rgbs = torch.cat(self.all_rgbs, dim=0)  # (N * H * W, 3)
