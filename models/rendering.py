@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from einops import rearrange, reduce, repeat
 
 __all__ = ['render_rays']
@@ -58,6 +59,8 @@ def render_rays(models,
                 chunk=1024*32,
                 white_back=False,
                 test_time=False,
+                use_sdf=True,
+                truncation=0.05,
                 **kwargs
                 ):
     """
@@ -75,9 +78,36 @@ def render_rays(models,
         white_back: whether the background is white (dataset dependent)
         test_time: whether it is test (inference only) or not. If True, it will not do inference
                    on coarse rgb to save time
+        truncation: the truncation distance of the TSDF field
     Outputs:
         result: dictionary containing final rgb and depth maps for coarse and fine models
     """
+
+
+    def sdf2weights(sdf):
+        """
+        In neural-rgbd, we didn't change the network architecture of NeRF, but use the
+        the output density field of NeRF as sdf value
+
+        Inputs:
+            sdf: (N_rays, N_samples)
+        Outputs:
+            weights: (N_rays, N_samples)
+        """
+        assert use_sdf, "TSDF is turned off"
+        # compute raw weights according to the paper
+        weights = torch.sigmoid(sdf / truncation) * torch.sigmoid(-sdf / truncation)
+        # if there exists multiple surface, we should only keep the first one
+        # compute the zero-crossing
+        signs = sdf[:, 1:] * sdf[:, :-1]
+        mask = torch.where(signs < 0.0, torch.ones_like(signs), torch.zeros_like(signs))
+        inds = torch.argmax(mask, axis=1)
+        inds = inds[..., None]
+        z_min = torch.gather(z_vals, 1, inds) # The first surface
+        mask = torch.where(z_vals < z_min + truncation, torch.ones_like(z_vals), torch.zeros_like(z_vals))
+
+        weights = weights * mask
+        return weights / (torch.sum(weights, axis=-1, keepdims=True) + 1e-8)
 
     def inference(results, model, typ, xyz, z_vals, test_time=False, **kwargs):
         """
@@ -101,7 +131,8 @@ def render_rays(models,
                 weights: (N_rays, N_samples_): weights of each sample
         """
         N_samples_ = xyz.shape[1]
-        xyz_ = rearrange(xyz, 'n1 n2 c -> (n1 n2) c') # (N_rays*N_samples_, 3)
+        xyz_ = rearrange(xyz, 'n1 n2 c -> (n1 n2) c')
+        # (N_rays * N_samples_, 3)
 
         # Perform model inference to get rgb and raw sigma
         B = xyz_.shape[0]
@@ -113,9 +144,12 @@ def render_rays(models,
 
             out = torch.cat(out_chunks, 0)
             sigmas = rearrange(out, '(n1 n2) 1 -> n1 n2', n1=N_rays, n2=N_samples_)
-        else: # infer rgb and sigma and others
+            if use_sdf:
+                weights = sdf2weights(sigmas)
+        else:
+            # infer rgb and sigma and others
             dir_embedded_ = repeat(dir_embedded, 'n1 c -> (n1 n2) c', n2=N_samples_)
-                            # (N_rays*N_samples_, embed_dir_channels)
+            # (N_rays * N_samples_, embed_dir_channels)
             for i in range(0, B, chunk):
                 xyz_embedded = embedding_xyz(xyz_[i:i+chunk])
                 xyzdir_embedded = torch.cat([xyz_embedded,
@@ -127,31 +161,39 @@ def render_rays(models,
             out = rearrange(out, '(n1 n2) c -> n1 n2 c', n1=N_rays, n2=N_samples_, c=4)
             rgbs = out[..., :3] # (N_rays, N_samples_, 3)
             sigmas = out[..., 3] # (N_rays, N_samples_)
+            if use_sdf:
+                weights = sdf2weights(sigmas)
             
-        # Convert these values using volume rendering (Section 4)
-        deltas = z_vals[:, 1:] - z_vals[:, :-1] # (N_rays, N_samples_-1)
-        delta_inf = 1e10 * torch.ones_like(deltas[:, :1]) # (N_rays, 1) the last delta is infinity
-        deltas = torch.cat([deltas, delta_inf], -1)  # (N_rays, N_samples_)
+        if not use_sdf:
+            # Convert these values using volume rendering (Section 4)
+            deltas = z_vals[:, 1:] - z_vals[:, :-1] # (N_rays, N_samples_-1)
+            delta_inf = 1e10 * torch.ones_like(deltas[:, :1]) # (N_rays, 1) the last delta is infinity
+            deltas = torch.cat([deltas, delta_inf], -1)  # (N_rays, N_samples_)
 
-        # compute alpha by the formula (3)
-        noise = torch.randn_like(sigmas) * noise_std
-        alphas = 1-torch.exp(-deltas*torch.relu(sigmas+noise)) # (N_rays, N_samples_)
+            # compute alpha by the formula (3)
+            noise = torch.randn_like(sigmas) * noise_std
+            alphas = 1-torch.exp(-deltas*torch.relu(sigmas+noise)) # (N_rays, N_samples_)
 
-        alphas_shifted = \
-            torch.cat([torch.ones_like(alphas[:, :1]), 1-alphas+1e-10], -1) # [1, 1-a1, 1-a2, ...]
-        weights = \
-            alphas * torch.cumprod(alphas_shifted[:, :-1], -1) # (N_rays, N_samples_)
+            alphas_shifted = \
+                torch.cat([torch.ones_like(alphas[:, :1]), 1-alphas+1e-10], -1) # [1, 1-a1, 1-a2, ...]
+            weights = \
+                alphas * torch.cumprod(alphas_shifted[:, :-1], -1) # (N_rays, N_samples_)
         weights_sum = reduce(weights, 'n1 n2 -> n1', 'sum') # (N_rays), the accumulated opacity along the rays
                                                             # equals "1 - (1-a1)(1-a2)...(1-an)" mathematically
 
         results[f'weights_{typ}'] = weights
         results[f'opacity_{typ}'] = weights_sum
         results[f'z_vals_{typ}'] = z_vals
+        results[f'sigmas_{typ}'] = sigmas
         if test_time and typ == 'coarse' and 'fine' in models:
             return
 
         rgb_map = reduce(rearrange(weights, 'n1 n2 -> n1 n2 1')*rgbs, 'n1 n2 c -> n1 c', 'sum')
-        depth_map = reduce(weights*z_vals, 'n1 n2 -> n1', 'sum')
+        if use_sdf:
+            depth_idx = torch.argmax(weights, -1)[None, :]
+            depth_map = torch.gather(z_vals, 1, depth_idx).reshape(-1)
+        else:
+            depth_map = reduce(weights*z_vals, 'n1 n2 -> n1', 'sum')
 
         if white_back:
             rgb_map += 1-weights_sum.unsqueeze(1)
