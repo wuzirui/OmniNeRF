@@ -43,7 +43,8 @@ class NeRFSystem(LightningModule):
                                           hparams.depth_weight,
                                           hparams.freespace_weight,
                                           hparams.truncation_weight,
-                                          hparams.truncation)
+                                          hparams.truncation,
+                                          hparams.omni_dir)
         else:
             self.use_sdf = False
             self.loss = loss_dict['color'](coef=1)
