@@ -61,6 +61,7 @@ def render_rays(models,
                 test_time=False,
                 use_sdf=True,
                 truncation=0.05,
+                omni_dir=False,
                 **kwargs
                 ):
     """
@@ -143,7 +144,13 @@ def render_rays(models,
                 out_chunks += [model(xyz_embedded, sigma_only=True)]
 
             out = torch.cat(out_chunks, 0)
-            sigmas = rearrange(out, '(n1 n2) 1 -> n1 n2', n1=N_rays, n2=N_samples_)
+            if omni_dir:
+                sigmas_corrs = rearrange(out, '(n1 n2) 2 -> n1 n2 2', n1=N_rays, n2=N_samples_)
+                sigmas = sigmas_corrs[..., 0]
+                corrs = sigmas_corrs[..., 1]
+            else:
+                sigmas = rearrange(out, '(n1 n2) 1 -> n1 n2 1', n1=N_rays, n2=N_samples_)
+
             if use_sdf:
                 weights = sdf2weights(sigmas)
         else:
@@ -158,9 +165,11 @@ def render_rays(models,
 
             out = torch.cat(out_chunks, 0)
             # out = out.view(N_rays, N_samples_, 4)
-            out = rearrange(out, '(n1 n2) c -> n1 n2 c', n1=N_rays, n2=N_samples_, c=4)
+            out = rearrange(out, '(n1 n2) c -> n1 n2 c', n1=N_rays, n2=N_samples_, c=5 if omni_dir else 4)
             rgbs = out[..., :3] # (N_rays, N_samples_, 3)
             sigmas = out[..., 3] # (N_rays, N_samples_)
+            if omni_dir:
+                corrs = out[..., 4]
             if use_sdf:
                 weights = sdf2weights(sigmas)
             
@@ -185,6 +194,8 @@ def render_rays(models,
         results[f'opacity_{typ}'] = weights_sum
         results[f'z_vals_{typ}'] = z_vals
         results[f'sigmas_{typ}'] = sigmas
+        if omni_dir:
+            results[f'corrs_{typ}'] = corrs
         if test_time and typ == 'coarse' and 'fine' in models:
             return
 

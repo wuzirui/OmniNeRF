@@ -54,15 +54,19 @@ class NeRFSystem(LightningModule):
                            'dir': self.embedding_dir}
 
         self.nerf_coarse = NeRF(in_channels_xyz=6*hparams.N_emb_xyz+3,
-                                in_channels_dir=6*hparams.N_emb_dir+3)
+                                in_channels_dir=6*hparams.N_emb_dir+3,
+                                omni_dir=hparams.omni_dir)
         self.models = {'coarse': self.nerf_coarse}
         load_ckpt(self.nerf_coarse, hparams.weight_path, 'nerf_coarse')
 
-        if hparams.N_importance > 0:
+        if hparams.N_importance > 0 and not hparams.share_coarse_fine:
             self.nerf_fine = NeRF(in_channels_xyz=6*hparams.N_emb_xyz+3,
-                                  in_channels_dir=6*hparams.N_emb_dir+3)
+                                  in_channels_dir=6*hparams.N_emb_dir+3,
+                                  omni_dir=hparams.omni_dir)
             self.models['fine'] = self.nerf_fine
             load_ckpt(self.nerf_fine, hparams.weight_path, 'nerf_fine')
+        elif hparams.share_coarse_fine:
+            self.models['fine'] = self.nerf_coarse
 
     def forward(self, rays):
         """Do batched inference on rays using chunk."""
@@ -80,7 +84,8 @@ class NeRFSystem(LightningModule):
                             self.hparams.N_importance,
                             self.hparams.chunk, # chunk size is effective in val mode
                             self.train_dataset.white_back,
-                            use_sdf=self.hparams.use_sdf
+                            use_sdf=self.hparams.use_sdf,
+                            omni_dir=self.hparams.omni_dir,
                             )
 
             for k, v in rendered_ray_chunks.items():
@@ -151,6 +156,8 @@ class NeRFSystem(LightningModule):
             self.log('train/color_loss_fine', color_fine, prog_bar=True)
             self.log('train/depth_loss_fine', depth_fine)
             self.logger.experiment.add_histogram('train/sdf_fine', results['sigmas_fine'], global_step=self.current_epoch)
+            if self.hparams.omni_dir:
+                self.logger.experiment.add_histogram('train/corr_fine', results['corrs_fine'], global_step=self.current_epoch)
             if fs_fine != -1:
                 self.log('train/freespace_loss_fine', fs_fine)
                 self.log('train/truncation_loss_fine', fs_fine)
@@ -190,6 +197,8 @@ class NeRFSystem(LightningModule):
             gt_sdf = get_gt_sdf(z_vals, depths[index].cpu(), self.hparams.truncation, front_mask, back_mask, sdf_mask)
             fig = plot_sdf_gt_with_predicted(z_vals, gt_sdf, predicted_sdf, depths[index].cpu(), self.hparams.truncation)
             self.logger.experiment.add_image(f'valsdf/sampled_{batch_nb}', fig, global_step=self.global_step)
+            if self.hparams.omni_dir:
+                self.logger.experiment.add_histogram('val/corr_fine', results['corrs_fine'], global_step=self.current_epoch)
         else:
             results = self(rays)
             log = {'val/loss': self.loss(results, rgbs)}
@@ -200,7 +209,10 @@ class NeRFSystem(LightningModule):
         img = results[f'rgb_{typ}'].view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
         img_gt = rgbs.view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
         depth = visualize_depth(results[f'depth_{typ}'].view(H, W)) # (3, H, W)
-        stack = torch.stack([img_gt, img, depth]) # (3, 3, H, W)
+        depth_gt = visualize_depth(depths.view(H, W)) # (3, H, W)
+        stack_rgb = torch.stack([img_gt, img]) # (2, 3, H, W)
+        stack_depth = torch.stack([depth_gt, depth]) # (2, 3, H, W)
+        stack = torch.cat([stack_rgb, stack_depth], dim=2) # (2, 3, 2H, W)
         self.logger.experiment.add_images(f'val/GT_pred_depth_{batch_nb}',
                                             stack, self.global_step)
 

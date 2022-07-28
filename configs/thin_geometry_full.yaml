@@ -1,7 +1,7 @@
 dataset_name: rgbd
 root_dir: ../thin_geometry
 N_samples: 512
-N_importance: 128
+N_importance: 16
 img_wh: [80, 60]
 num_epochs: 30
 batch_size: 200
@@ -17,3 +17,7 @@ freespace_weight: 1e7
 truncation_weight: 1e8
 val_check_interval: 0.1
 max_val_images: 8
+N_emb_dir: 8
+N_emb_xyz: 8
+share_coarse_fine: True
+omni_dir: False

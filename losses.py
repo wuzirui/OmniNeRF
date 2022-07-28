@@ -30,10 +30,11 @@ class DepthLoss(nn.Module):
         return self.coef * loss
 
 class SDFLoss(nn.Module):
-    def __init__(self, truncation):
+    def __init__(self, truncation, omni_dir):
         super().__init__()
         self.img2mse = lambda x, y: torch.mean((x - y) ** 2)
         self.truncation = truncation
+        self.omni_dir = omni_dir
 
     def forward(self, z_vals, predicted_sdf, gt_depth):
         """
@@ -50,13 +51,21 @@ class SDFLoss(nn.Module):
         """
         gt_depth = gt_depth[:, None]
         front_mask, back_mask, sdf_mask = get_gt_sdf_masks(z_vals, gt_depth, self.truncation)
-        front_samples = torch.count_nonzero(front_mask)
+        if self.omni_dir:
+            fs_mask = front_mask + back_mask
+        else:
+            front_samples = torch.count_nonzero(front_mask)
+        fs_samples = torch.count_nonzero(fs_mask)
         sdf_samples = torch.count_nonzero(sdf_mask)
         
         gt_sdf = get_gt_sdf(z_vals, gt_depth, self.truncation, front_mask, back_mask, sdf_mask)
 
-        return self.img2mse(predicted_sdf * front_mask, gt_sdf * front_mask) / front_samples, \
-               self.img2mse(predicted_sdf * sdf_mask, gt_sdf * sdf_mask) / sdf_samples
+        if self.omni_dir:
+            return self.img2mse(predicted_sdf * fs_mask, gt_sdf * fs_mask) / fs_samples, \
+                self.img2mse(predicted_sdf * sdf_mask, gt_sdf * sdf_mask) / sdf_samples
+        
+        return self.img2mse(predicted_sdf * front_mask, gt_sdf * front_mask) / front_mask, \
+            self.img2mse(predicted_sdf * sdf_mask, gt_sdf * sdf_mask) / sdf_samples
 
 class RGBDLoss(nn.Module):
     def __init__(self, color_coef=0.1, depth_coef=0.1, freespace_weight=10, truncation_weight=6000, truncation=0.05):

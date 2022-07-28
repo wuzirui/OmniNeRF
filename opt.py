@@ -16,6 +16,8 @@ def get_opts():
     parser.add_argument('--spheric_poses', default=False, action="store_true",
                         help='whether images are taken in spheric poses (for llff)')
 
+    parser.add_argument('--share_coarse_fine', default=False, action="store_true",
+                        help='whether to use the same network for coarse and fine sampling')
     parser.add_argument('--N_emb_xyz', type=int, default=10,
                         help='number of frequencies in xyz positional encoding')
     parser.add_argument('--N_emb_dir', type=int, default=4,
@@ -82,6 +84,7 @@ def get_opts():
     ##########################
     #### params for depth ####
     parser.add_argument('--use_sdf', default=False, action='store_true')
+    parser.add_argument('--omni_dir', default=False, action='store_true')
     parser.add_argument('--truncation', type=float, default=0.05)
 
     parser.add_argument('--color_weight', type=float, default=1.0)

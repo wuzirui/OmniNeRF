@@ -40,13 +40,14 @@ class NeRF(nn.Module):
     def __init__(self,
                  D=8, W=256,
                  in_channels_xyz=63, in_channels_dir=27, 
-                 skips=[4]):
+                 skips=[4], omni_dir=False):
         """
         D: number of layers for density (sigma) encoder
         W: number of hidden units in each layer
         in_channels_xyz: number of input channels for xyz (3+3*10*2=63 by default)
         in_channels_dir: number of input channels for direction (3+3*4*2=27 by default)
         skips: add skip connection in the Dth layer
+        omni_dir: use odf instead of sdf
         """
         super(NeRF, self).__init__()
         self.D = D
@@ -54,6 +55,7 @@ class NeRF(nn.Module):
         self.in_channels_xyz = in_channels_xyz
         self.in_channels_dir = in_channels_dir
         self.skips = skips
+        self.omni_dir = omni_dir
 
         # xyz encoding layers
         for i in range(D):
@@ -74,9 +76,16 @@ class NeRF(nn.Module):
 
         # output layers
         self.sigma = nn.Linear(W, 1)
-        self.rgb = nn.Sequential(
-                        nn.Linear(W//2, 3),
-                        nn.Sigmoid())
+        if self.omni_dir:
+            self.rgb_dcorr = nn.Sequential(
+                nn.Linear(W//2, 4),
+                nn.Sigmoid()
+            )
+        else:
+            self.rgb = nn.Sequential(
+                nn.Linear(W//2, 3),
+                nn.Sigmoid()
+            )
 
     def forward(self, x, sigma_only=False):
         """
@@ -108,15 +117,20 @@ class NeRF(nn.Module):
             xyz_ = getattr(self, f"xyz_encoding_{i+1}")(xyz_)
 
         sigma = self.sigma(xyz_)
-        if sigma_only:
-            return sigma
 
         xyz_encoding_final = self.xyz_encoding_final(xyz_)
 
         dir_encoding_input = torch.cat([xyz_encoding_final, input_dir], -1)
         dir_encoding = self.dir_encoding(dir_encoding_input)
+        if self.omni_dir:
+            rgb_dcorr = self.rgb_dcorr(dir_encoding)
+            rgb = rgb_dcorr[:, :3]
+            dcorr = rgb_dcorr[:, 3:]
+            if sigma_only:
+                return sigma + dcorr
+            return torch.cat([rgb, sigma + dcorr, dcorr], -1)
+
+        if sigma_only:
+            return sigma
         rgb = self.rgb(dir_encoding)
-
-        out = torch.cat([rgb, sigma], -1)
-
-        return out
+        return torch.cat([rgb, sigma], -1)
