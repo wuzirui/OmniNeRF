@@ -3,7 +3,7 @@ from xmlrpc.client import Boolean
 
 def get_opts():
     parser = configargparse.ArgParser(config_file_parser_class=configargparse.YAMLConfigFileParser)
-    parser.add_argument('--config', is_config_file=True, help='config file path')
+    parser.add_argument('--config', is_config_file=True, help='config file path', required=True)
 
     parser.add_argument('--root_dir', type=str,
                         default='/home/ubuntu/data/nerf_example_data/nerf_synthetic/lego',
@@ -81,7 +81,7 @@ def get_opts():
                         help='experiment name')
     ##########################
     #### params for depth ####
-    parser.add_argument('--use_sdf', default=False, type=bool)
+    parser.add_argument('--use_sdf', default=False, action='store_true')
     parser.add_argument('--truncation', type=float, default=0.05)
 
     parser.add_argument('--color_weight', type=float, default=1.0)
@@ -91,15 +91,15 @@ def get_opts():
 
     ##########################
     #### params for nerf-w ###
-    parser.add_argument('--use_appearance_embedding', type=bool, default=True)
+    parser.add_argument('--use_appearance_embedding', default=False, action="store_true")
 
     ##########################
     #### pose refinement  ####
-    parser.add_argument('--use_deformation_field', type=bool, default=False)
+    parser.add_argument('--use_deformation_field', default=False, action="store_true")
 
     ##########################
     #### test train       ####
-    parser.add_argument('--test_train', type=bool, default=False)
+    parser.add_argument('--test_train', default=False, action="store_true")
     parser.add_argument('--max_val_images', type=int, default=None)
 
     return parser.parse_args()
