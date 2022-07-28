@@ -50,7 +50,7 @@ class RGBDDatset(Dataset):
             idx = [i for i in range(len(self.image_paths)) if i % 20 == 0]
             if self.max_val_imgs is not None and len(idx) > self.max_val_imgs:
                 perm = np.random.permutation(len(idx))[:self.max_val_imgs]
-                idx = [idx[i] for i in perm]
+                idx = sorted([idx[i] for i in perm])
                 print(f"selected val images = {idx}")
             self.n_images = len(idx)
             print(f"selected {len(idx)} images for validation")
