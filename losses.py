@@ -4,9 +4,8 @@ from torch import nn
 from models.sdf_utils import *
 
 class ColorLoss(nn.Module):
-    def __init__(self, coef=1):
+    def __init__(self):
         super().__init__()
-        self.coef = coef
         self.loss = nn.MSELoss(reduction='mean')
 
     def forward(self, inputs, targets):
@@ -14,12 +13,11 @@ class ColorLoss(nn.Module):
         if 'rgb_fine' in inputs:
             loss += self.loss(inputs['rgb_fine'].view(-1, 3), targets.view(-1, 3))
 
-        return self.coef * loss
+        return loss
                
 class DepthLoss(nn.Module):
-    def __init__(self, coef=1):
+    def __init__(self):
         super().__init__()
-        self.coef = coef
         self.loss = nn.MSELoss(reduction='mean')
 
     def forward(self, inputs, targets):
@@ -27,7 +25,7 @@ class DepthLoss(nn.Module):
         if 'depth_fine' in inputs:
             loss += self.loss(inputs['depth_fine'].view(-1, 1), targets.view(-1, 1))
 
-        return self.coef * loss
+        return loss
 
 class SDFLoss(nn.Module):
     def __init__(self, truncation, omni_dir):
@@ -70,8 +68,8 @@ class SDFLoss(nn.Module):
 class RGBDLoss(nn.Module):
     def __init__(self, color_coef=0.1, depth_coef=0.1, freespace_weight=10, truncation_weight=6000, truncation=0.05, omni_dir=False):
         super().__init__()
-        self.rgb_loss = ColorLoss(color_coef)
-        self.depth_loss = DepthLoss(depth_coef)
+        self.rgb_loss = ColorLoss()
+        self.depth_loss = DepthLoss()
         self.sdf_loss = SDFLoss(truncation, omni_dir)
         self.color_coef = color_coef
         self.depth_coef = depth_coef
@@ -84,7 +82,7 @@ class RGBDLoss(nn.Module):
         fs_c, tr_c = self.sdf_loss(input_result['z_vals_coarse'],
                                               input_result['sigmas_coarse'],
                                               gt_depth)
-        loss = rgb_loss + depth_loss + fs_c * self.freespace_weight + tr_c * self.truncation_weight
+        loss = rgb_loss * self.color_coef + depth_loss * self.depth_coef + fs_c * self.freespace_weight + tr_c * self.truncation_weight
         sdf_fine = -1
         if 'z_vals_fine' in input_result:
             fs_f, tr_f = self.sdf_loss(input_result['z_vals_fine'],

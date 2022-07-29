@@ -98,6 +98,8 @@ def render_rays(models,
         assert use_sdf, "TSDF is turned off"
         # compute raw weights according to the paper
         weights = torch.sigmoid(sdf / truncation) * torch.sigmoid(-sdf / truncation)
+        if omni_dir:
+            return weights / (torch.sum(weights, axis=-1, keepdim=True) + 1e-8)
         # if there exists multiple surface, we should only keep the first one
         # compute the zero-crossing
         signs = sdf[:, 1:] * sdf[:, :-1]
@@ -199,12 +201,9 @@ def render_rays(models,
         if test_time and typ == 'coarse' and 'fine' in models:
             return
 
-        rgb_map = reduce(rearrange(weights, 'n1 n2 -> n1 n2 1')*rgbs, 'n1 n2 c -> n1 c', 'sum')
-        if use_sdf:
-            depth_idx = torch.argmax(weights, -1)[None, :]
-            depth_map = torch.gather(z_vals, 1, depth_idx).reshape(-1)
-        else:
-            depth_map = reduce(weights*z_vals, 'n1 n2 -> n1', 'sum')
+        # rgb_map = reduce(rearrange(weights, 'n1 n2 -> n1 n2 1')*rgbs, 'n1 n2 c -> n1 c', 'sum')
+        rgb_map = torch.sum(weights[...,None] * rgbs, -2)  # [N_rays, 3]
+        depth_map = torch.sum(weights * z_vals, -1)
 
         if white_back:
             rgb_map += 1-weights_sum.unsqueeze(1)

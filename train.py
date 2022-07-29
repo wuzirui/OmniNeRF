@@ -243,6 +243,7 @@ def main(hparams):
     logger = TensorBoardLogger(save_dir="logs",
                                name=hparams.exp_name,
                                default_hp_metric=False)
+    logger.experiment.add_text('hparams', str(hparams))
 
     trainer = Trainer(max_epochs=hparams.num_epochs,
                       callbacks=callbacks,
@@ -258,7 +259,8 @@ def main(hparams):
     )
                     #   strategy=DDPPlugin(find_unused_parameters=False) if hparams.num_gpus>1 else None)
 
-    trainer.fit(system)
+    with torch.autograd.set_detect_anomaly(True):
+        trainer.fit(system)
 
 
 if __name__ == '__main__':
