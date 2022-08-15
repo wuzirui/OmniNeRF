@@ -155,11 +155,11 @@ class RGBDDatset(Dataset):
         return len(self.all_rays)
 
     def __getitem__(self, idx):
-        if isinstance(idx, int):
+        if self.split == 'train':
+            cidx = self.all_rays[idx][-1].long()
+        else:
             cidx = torch.ones((self.img_wh[0] * self.img_wh[1], )) * idx
             cidx = cidx.long()
-        else:
-            cidx = self.all_rays[idx][-1].long()
         return {
             'rays': self.all_rays[idx],
             'rgbs': self.all_rgbs[idx],

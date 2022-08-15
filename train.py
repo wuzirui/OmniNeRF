@@ -259,7 +259,7 @@ def main(hparams):
                       enable_model_summary=False,
                       accelerator='gpu',
                       devices=hparams.num_gpus,
-                      num_sanity_val_steps=1,
+                      num_sanity_val_steps=0,
                       benchmark=True,
                       profiler="simple" if hparams.num_gpus==1 else None,
                       val_check_interval=hparams.val_check_interval,
