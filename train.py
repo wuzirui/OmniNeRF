@@ -2,6 +2,7 @@ import os
 import numpy as np
 
 from pytorch_lightning.accelerators import accelerator
+from models.pose_correction import PoseCorrection
 from opt import get_opts
 import torch
 from collections import defaultdict
@@ -67,9 +68,10 @@ class NeRFSystem(LightningModule):
             self.models['fine'] = self.nerf_fine
             load_ckpt(self.nerf_fine, hparams.weight_path, 'nerf_fine')
         elif hparams.share_coarse_fine:
-            self.models['fine'] = self.nerf_coarse
+            pass
+        
 
-    def forward(self, rays):
+    def forward(self, rays, c2w_array, pose_corr=None):
         """Do batched inference on rays using chunk."""
         B = rays.shape[0]
         results = defaultdict(list)
@@ -78,6 +80,8 @@ class NeRFSystem(LightningModule):
                 render_rays(self.models,
                             self.embeddings,
                             rays[i:i+self.hparams.chunk],
+                            c2w_array,
+                            pose_corr,
                             self.hparams.N_samples,
                             self.hparams.use_disp,
                             self.hparams.perturb,
@@ -113,6 +117,9 @@ class NeRFSystem(LightningModule):
         else:
             self.train_dataset = dataset(split='train', **kwargs)
             self.val_dataset = dataset(split='val', max_val_imgs=max_val_images,**kwargs)
+        if not hparams.pose_gt:
+            self.pose_corr = PoseCorrection(len(self.train_dataset))
+            self.models['pose_corr'] = self.pose_corr
 
     def configure_optimizers(self):
         self.optimizer = get_optimizer(self.hparams, self.models)
@@ -123,7 +130,7 @@ class NeRFSystem(LightningModule):
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
-                          shuffle=True,
+                          shuffle=True, # TODO FIX back to True
                           num_workers=4,
                           batch_size=self.hparams.batch_size,
                           pin_memory=True)
@@ -137,12 +144,12 @@ class NeRFSystem(LightningModule):
     
     def training_step(self, batch, batch_nb):
         if not self.use_sdf:
-            rays, rgbs = batch['rays'], batch['rgbs']
-            results = self(rays)
+            rays, rgbs, c2ws = batch['rays'], batch['rgbs'], batch['c2ws']
+            results = self(rays, c2ws, self.models['pose_corr'])
             loss = self.loss(results, rgbs)
         else:
-            rays, rgbs, depths = batch['rays'], batch['rgbs'], batch['depths']
-            results = self(rays)
+            rays, rgbs, depths, c2ws = batch['rays'], batch['rgbs'], batch['depths'], batch['c2ws']
+            results = self(rays, c2ws, self.models['pose_corr'])
             loss, color_fine, depth_fine, fs_coarse, fs_fine, tr_coarse, \
                 tr_fine = self.loss(results, rgbs, depths)
 
@@ -172,14 +179,14 @@ class NeRFSystem(LightningModule):
 
     def validation_step(self, batch, batch_nb):
         if self.use_sdf:
-            rays, rgbs, depths = batch['rays'], batch['rgbs'], batch['depths']
+            rays, rgbs, depths, c2ws = batch['rays'], batch['rgbs'], batch['depths'], batch['c2ws']
         else:
             rays, rgbs = batch['rays'], batch['rgbs']
         rays = rays.squeeze() # (H*W, 3)
         rgbs = rgbs.squeeze() # (H*W, 3)
         if self.use_sdf:
             depths = depths.squeeze() # (H*W, 1)
-            results = self(rays)
+            results = self(rays, c2ws)
             loss, rgb_loss, depth_loss, fs_c, fs_f, tr_c, tr_f = \
                 self.loss(results, rgbs, depths)
             log = {

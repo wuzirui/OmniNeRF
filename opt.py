@@ -98,7 +98,7 @@ def get_opts():
 
     ##########################
     #### pose refinement  ####
-    parser.add_argument('--use_deformation_field', default=False, action="store_true")
+    parser.add_argument('--pose_gt', default=False, action="store_true")
 
     ##########################
     #### test train       ####

@@ -42,12 +42,12 @@ class RGBDDatset(Dataset):
             self.poses = torch.tensor(self.poses, dtype=torch.float32).reshape(-1, 4, 4)
             self.poses = self.poses[:, :3, :]
         if self.split == 'train':
-            idx = [i for i in range(len(self.image_paths)) if i % 20 != 0]
+            idx = [i for i in range(len(self.image_paths)) if i % 20 != 0 or i == 0]
             self.n_images = len(idx)
             print(f"selected {len(idx)} images for training")
 
         elif self.split == 'val':
-            idx = [i for i in range(len(self.image_paths)) if i % 20 == 0]
+            idx = [i for i in range(len(self.image_paths)) if i % 20 == 0 and i != 0]
             if self.max_val_imgs is not None and len(idx) > self.max_val_imgs:
                 perm = np.random.permutation(len(idx))[:self.max_val_imgs]
                 idx = sorted([idx[i] for i in perm])
@@ -119,10 +119,12 @@ class RGBDDatset(Dataset):
         # (H, W, 3)
 
         self.all_rays = []
-        for c2w in self.poses:
-            # convert precomputed camera rays (in camera coordinate system) 
-            # to world coordinate system
-            rays_o, rays_d = get_rays(self.directions, c2w)
+        self.index = []
+        for i in range(len(self.poses)):
+            # rays_o, rays_d = get_rays(self.directions, c2w)
+            # in camera coordinate system
+            rays_d = self.directions.reshape(-1, 3)
+            rays_o = torch.zeros_like(rays_d)
             # both (H * W, 3)
             
             # RGBD datasets are taken in spheric inward-facing manner by default
@@ -130,17 +132,21 @@ class RGBDDatset(Dataset):
 
             # ray format: (H * W, 8), foreach ray: 
             # origin(3), direction(3), near bound(1), far bound(1)
-            near, far = 0, 1
+            near, far = 0, 2
             self.all_rays += [torch.cat([
                 rays_o, rays_d,
                 near * torch.ones_like(rays_o[:, :1]),
-                far * torch.ones_like(rays_o[:, :1])
+                far * torch.ones_like(rays_o[:, :1]),
+                i * torch.ones_like(rays_o[:, :1]),
             ], -1)]
+            self.index += i * torch.ones_like(rays_o[:, :1])
         if self.split == 'train' or self.split == 'test_train':
-            self.all_rays = torch.cat(self.all_rays, dim=0)  # (N * H * W, 8)
+            self.all_rays = torch.cat(self.all_rays, dim=0)  # (N * H * W, 9)
+            self.index = torch.cat(self.index, dim=0)  # (N * H * W, 1)
         else:
             self.all_rays = torch.stack(self.all_rays, dim=0)
-            # (N, H * W, 8)
+            self.index = torch.stack(self.index, dim=0)  # (N, H * W, 1)
+            # (N, H * W, 9)
         print(f"done")
 
         
@@ -149,8 +155,14 @@ class RGBDDatset(Dataset):
         return len(self.all_rays)
 
     def __getitem__(self, idx):
+        if isinstance(idx, int):
+            cidx = torch.ones((self.img_wh[0] * self.img_wh[1], )) * idx
+            cidx = cidx.long()
+        else:
+            cidx = self.all_rays[idx][-1].long()
         return {
             'rays': self.all_rays[idx],
             'rgbs': self.all_rgbs[idx],
-            'depths': self.all_depths[idx]
+            'depths': self.all_depths[idx],
+            'c2ws': self.poses[cidx],
         }

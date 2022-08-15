@@ -51,6 +51,8 @@ def sample_pdf(bins, weights, N_importance, det=False, eps=1e-5):
 def render_rays(models,
                 embeddings,
                 rays,
+                c2w_array,
+                pose_correction=None,
                 N_samples=64,
                 use_disp=False,
                 perturb=0,
@@ -98,8 +100,6 @@ def render_rays(models,
         assert use_sdf, "TSDF is turned off"
         # compute raw weights according to the paper
         weights = torch.sigmoid(sdf / truncation) * torch.sigmoid(-sdf / truncation)
-        if omni_dir:
-            return weights / (torch.sum(weights, axis=-1, keepdim=True) + 1e-8)
         # if there exists multiple surface, we should only keep the first one
         # compute the zero-crossing
         signs = sdf[:, 1:] * sdf[:, :-1]
@@ -134,12 +134,26 @@ def render_rays(models,
                 weights: (N_rays, N_samples_): weights of each sample
         """
         N_samples_ = xyz.shape[1]
+        N_rays_ = xyz.shape[0]
         xyz_ = rearrange(xyz, 'n1 n2 c -> (n1 n2) c')
         # (N_rays * N_samples_, 3)
+        c2ws = c2w_array.reshape(-1, 3, 4).expand(N_samples_, -1, 3, 4).reshape(-1, 3, 4)  # (N_rays * N_samples_, 3, 4)
+        frame_idx = idx.long().expand(N_samples_, -1, 1).reshape(-1)                     # (N_rays * N_samples_, )
+        view_dir = kwargs.get('view_dir', rays_d).expand(N_samples_, -1, 1, 3).reshape(-1, 3)
 
         # Perform model inference to get rgb and raw sigma
         B = xyz_.shape[0]
         out_chunks = []
+
+        xyz_ = torch.sum(xyz_[..., None, :] * c2ws[..., :3, :3], axis=-1) + c2ws[..., :3, 3]
+        view_dir = torch.sum(view_dir[..., None, :] * c2ws[..., :3, :3], axis=-1)
+
+        if pose_correction is not None:
+            R = pose_correction.get_rotation_matrices(frame_idx)
+            t = pose_correction.get_translations(frame_idx)
+            xyz_ = torch.sum(xyz_[..., None, :] * R, axis=-1) + t
+            view_dir = torch.sum(view_dir[..., None, :] * R, axis=-1)
+
         if typ=='coarse' and test_time and 'fine' in models:
             for i in range(0, B, chunk):
                 xyz_embedded = embedding_xyz(xyz_[i:i+chunk])
@@ -157,7 +171,7 @@ def render_rays(models,
                 weights = sdf2weights(sigmas)
         else:
             # infer rgb and sigma and others
-            dir_embedded_ = repeat(dir_embedded, 'n1 c -> (n1 n2) c', n2=N_samples_)
+            dir_embedded_ = embedding_dir(view_dir)
             # (N_rays * N_samples_, embed_dir_channels)
             for i in range(0, B, chunk):
                 xyz_embedded = embedding_xyz(xyz_[i:i+chunk])
@@ -199,11 +213,14 @@ def render_rays(models,
         if omni_dir:
             results[f'corrs_{typ}'] = corrs
         if test_time and typ == 'coarse' and 'fine' in models:
-            return
+            return results
 
-        # rgb_map = reduce(rearrange(weights, 'n1 n2 -> n1 n2 1')*rgbs, 'n1 n2 c -> n1 c', 'sum')
-        rgb_map = torch.sum(weights[...,None] * rgbs, -2)  # [N_rays, 3]
-        depth_map = torch.sum(weights * z_vals, -1)
+        rgb_map = reduce(rearrange(weights, 'n1 n2 -> n1 n2 1')*rgbs, 'n1 n2 c -> n1 c', 'sum')
+        if use_sdf:
+            depth_idx = torch.argmax(weights, -1)[None, :]
+            depth_map = torch.gather(z_vals, 1, depth_idx).reshape(-1)
+        else:
+            depth_map = reduce(weights*z_vals, 'n1 n2 -> n1', 'sum')
 
         if white_back:
             rgb_map += 1-weights_sum.unsqueeze(1)
@@ -211,7 +228,7 @@ def render_rays(models,
         results[f'rgb_{typ}'] = rgb_map
         results[f'depth_{typ}'] = depth_map
 
-        return
+        return results
 
     embedding_xyz, embedding_dir = embeddings['xyz'], embeddings['dir']
 
@@ -219,8 +236,9 @@ def render_rays(models,
     N_rays = rays.shape[0]
     rays_o, rays_d = rays[:, 0:3], rays[:, 3:6] # both (N_rays, 3)
     near, far = rays[:, 6:7], rays[:, 7:8] # both (N_rays, 1)
+    idx = rays[:, 8:9] # (N_rays, 1)
     # Embed direction
-    dir_embedded = embedding_dir(kwargs.get('view_dir', rays_d)) # (N_rays, embed_dir_channels)
+    # dir_embedded = embedding_dir(kwargs.get('view_dir', rays_d)) # (N_rays, embed_dir_channels)
 
     rays_o = rearrange(rays_o, 'n1 c -> n1 1 c')
     rays_d = rearrange(rays_d, 'n1 c -> n1 1 c')
@@ -259,6 +277,7 @@ def render_rays(models,
 
         xyz_fine = rays_o + rays_d * rearrange(z_vals, 'n1 n2 -> n1 n2 1')
 
-        inference(results, models['fine'], 'fine', xyz_fine, z_vals, test_time, **kwargs)
+        model = models['fine'] if 'fine' in models else models['coarse']
+        inference(results, model, 'fine', xyz_fine, z_vals, test_time, **kwargs)
 
     return results
