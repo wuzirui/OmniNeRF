@@ -55,6 +55,7 @@ class SDFLoss(nn.Module):
         else:
             front_samples = torch.count_nonzero(front_mask)
         sdf_samples = torch.count_nonzero(sdf_mask)
+        n_samples = sdf_samples + front_samples
         
         gt_sdf = get_gt_sdf(z_vals, gt_depth, self.truncation, front_mask, back_mask, sdf_mask)
 
@@ -62,8 +63,8 @@ class SDFLoss(nn.Module):
             return self.img2mse(predicted_sdf * fs_mask, gt_sdf * fs_mask) / fs_samples, \
                 self.img2mse(predicted_sdf * sdf_mask, gt_sdf * sdf_mask) / sdf_samples
         
-        return self.img2mse(predicted_sdf * front_mask, gt_sdf * front_mask) / front_samples, \
-            self.img2mse(predicted_sdf * sdf_mask, gt_sdf * sdf_mask) / sdf_samples
+        return self.img2mse(predicted_sdf * front_mask, gt_sdf * front_mask) * sdf_samples / n_samples, \
+            self.img2mse(predicted_sdf * sdf_mask, gt_sdf * sdf_mask) * fs_samples / n_samples
 
 class RGBDLoss(nn.Module):
     def __init__(self, color_coef=0.1, depth_coef=0.1, freespace_weight=10, truncation_weight=6000, truncation=0.05, omni_dir=False):

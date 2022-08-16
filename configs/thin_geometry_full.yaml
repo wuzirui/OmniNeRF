@@ -2,22 +2,22 @@ dataset_name: rgbd
 root_dir: ./data/thin_geometry
 N_samples: 512
 N_importance: 32
-img_wh: [80, 60]
+img_wh: [320, 240]
 num_epochs: 30
-batch_size: 100
+batch_size: 80
 optimizer: adam
 lr: 5e-4
 lr_scheduler: exp
 decay_gamma: 0.9999
 exp_name: exp/thin_geometry/
 use_sdf: True
-color_weight: 1
+color_weight: 10
 depth_weight: 0.05
-freespace_weight: 1e4
-truncation_weight: 1e7
-val_check_interval: 0.1
+freespace_weight: 0.1
+truncation_weight: 0.1
+val_check_interval: 0.005
 max_val_images: 10
-N_emb_dir: 4
-N_emb_xyz: 8
+N_emb_dir: 10
+N_emb_xyz: 10
 share_coarse_fine: True
 omni_dir: False

@@ -69,7 +69,7 @@ class NeRFSystem(LightningModule):
             # load_ckpt(self.nerf_fine, hparams.weight_path, 'nerf_fine')
         elif hparams.share_coarse_fine:
             pass
-        
+
 
     def forward(self, rays, c2w_array, pose_corr=None):
         """Do batched inference on rays using chunk."""
@@ -130,7 +130,7 @@ class NeRFSystem(LightningModule):
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
-                          shuffle=False, # TODO FIX back to True
+                          shuffle=True, # TODO FIX back to True
                           num_workers=4,
                           batch_size=self.hparams.batch_size,
                           pin_memory=True)
@@ -141,7 +141,7 @@ class NeRFSystem(LightningModule):
                           num_workers=4,
                           batch_size=1, # validate one image (H*W rays) at a time
                           pin_memory=True)
-    
+
     def training_step(self, batch, batch_nb):
         if not self.use_sdf:
             rays, rgbs, c2ws = batch['rays'], batch['rgbs'], batch['c2ws']
@@ -212,7 +212,7 @@ class NeRFSystem(LightningModule):
             log = {'val/loss': self.loss(results, rgbs)}
 
         typ = 'fine' if 'rgb_fine' in results else 'coarse'
-    
+
         W, H = self.hparams.img_wh
         img = results[f'rgb_{typ}'].view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
         img_gt = rgbs.view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
