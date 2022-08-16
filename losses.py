@@ -49,13 +49,14 @@ class SDFLoss(nn.Module):
         """
         gt_depth = gt_depth[:, None]
         front_mask, back_mask, sdf_mask = get_gt_sdf_masks(z_vals, gt_depth, self.truncation)
+        sdf_samples = torch.count_nonzero(sdf_mask)
         if self.omni_dir:
             fs_mask = front_mask + back_mask
             fs_samples = torch.count_nonzero(fs_mask)
+            n_samples = sdf_samples = fs_samples
         else:
             front_samples = torch.count_nonzero(front_mask)
-        sdf_samples = torch.count_nonzero(sdf_mask)
-        n_samples = sdf_samples + front_samples
+            n_samples = sdf_samples + front_samples
         
         gt_sdf = get_gt_sdf(z_vals, gt_depth, self.truncation, front_mask, back_mask, sdf_mask)
 
