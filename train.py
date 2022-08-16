@@ -168,10 +168,10 @@ class NeRFSystem(LightningModule):
                 self.logger.experiment.add_histogram('train/corr_fine', results['corrs_fine'], global_step=self.current_epoch)
             if fs_fine != -1:
                 self.log('train/freespace_loss_fine', fs_fine)
-                self.log('train/truncation_loss_fine', fs_fine)
+                self.log('train/truncation_loss_fine', tr_fine)
             else:
                 self.log('train/freespace_loss_coarse', fs_coarse)
-                self.log('train/truncation_loss_coarse', fs_coarse)
+                self.log('train/truncation_loss_coarse', tr_coarse)
 
         self.batch_nb = batch_nb
         self.scheduler.step()       # update learning rate
