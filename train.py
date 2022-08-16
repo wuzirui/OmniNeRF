@@ -80,7 +80,7 @@ class NeRFSystem(LightningModule):
                 render_rays(self.models,
                             self.embeddings,
                             rays[i:i+self.hparams.chunk],
-                            c2w_array,
+                            c2w_array[:, i:i+self.hparams.chunk],
                             pose_corr,
                             self.hparams.N_samples,
                             self.hparams.use_disp,
@@ -149,7 +149,7 @@ class NeRFSystem(LightningModule):
             loss = self.loss(results, rgbs)
         else:
             rays, rgbs, depths, c2ws = batch['rays'], batch['rgbs'], batch['depths'], batch['c2ws']
-            results = self(rays, c2ws, self.models['pose_corr'])
+            results = self(rays, c2ws, self.models['pose_corr'] if 'pose_corr' in self.models else None)
             loss, color_fine, depth_fine, fs_coarse, fs_fine, tr_coarse, \
                 tr_fine = self.loss(results, rgbs, depths)
 
@@ -259,7 +259,7 @@ def main(hparams):
                       enable_model_summary=False,
                       accelerator='gpu',
                       devices=hparams.num_gpus,
-                      num_sanity_val_steps=0,
+                      num_sanity_val_steps=1,
                       benchmark=True,
                       profiler="simple" if hparams.num_gpus==1 else None,
                       val_check_interval=hparams.val_check_interval,

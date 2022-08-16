@@ -1,5 +1,5 @@
 dataset_name: rgbd
-root_dir: ./data/thin_geometry
+root_dir: ../thin_geometry
 N_samples: 512
 N_importance: 32
 img_wh: [320, 240]
@@ -21,3 +21,4 @@ N_emb_dir: 10
 N_emb_xyz: 10
 share_coarse_fine: True
 omni_dir: False
+pose_gt: True

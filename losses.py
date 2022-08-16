@@ -64,7 +64,7 @@ class SDFLoss(nn.Module):
                 self.img2mse(predicted_sdf * sdf_mask, gt_sdf * sdf_mask) / sdf_samples
         
         return self.img2mse(predicted_sdf * front_mask, gt_sdf * front_mask) * sdf_samples / n_samples, \
-            self.img2mse(predicted_sdf * sdf_mask, gt_sdf * sdf_mask) * fs_samples / n_samples
+            self.img2mse(predicted_sdf * sdf_mask, gt_sdf * sdf_mask) * front_samples / n_samples
 
 class RGBDLoss(nn.Module):
     def __init__(self, color_coef=0.1, depth_coef=0.1, freespace_weight=10, truncation_weight=6000, truncation=0.05, omni_dir=False):
