@@ -216,11 +216,7 @@ def render_rays(models,
             return results
 
         rgb_map = reduce(rearrange(weights, 'n1 n2 -> n1 n2 1')*rgbs, 'n1 n2 c -> n1 c', 'sum')
-        if use_sdf:
-            depth_idx = torch.argmax(weights, -1)[None, :]
-            depth_map = torch.gather(z_vals, 1, depth_idx).reshape(-1)
-        else:
-            depth_map = reduce(weights*z_vals, 'n1 n2 -> n1', 'sum')
+        depth_map = reduce(weights*z_vals, 'n1 n2 -> n1', 'sum')
 
         if white_back:
             rgb_map += 1-weights_sum.unsqueeze(1)

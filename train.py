@@ -59,14 +59,14 @@ class NeRFSystem(LightningModule):
                                 in_channels_dir=6*hparams.N_emb_dir+3,
                                 omni_dir=hparams.omni_dir)
         self.models = {'coarse': self.nerf_coarse}
-        load_ckpt(self.nerf_coarse, hparams.weight_path, 'nerf_coarse')
+        # load_ckpt(self.nerf_coarse, hparams.weight_path, 'nerf_coarse')
 
         if hparams.N_importance > 0 and not hparams.share_coarse_fine:
             self.nerf_fine = NeRF(in_channels_xyz=6*hparams.N_emb_xyz+3,
                                   in_channels_dir=6*hparams.N_emb_dir+3,
                                   omni_dir=hparams.omni_dir)
             self.models['fine'] = self.nerf_fine
-            load_ckpt(self.nerf_fine, hparams.weight_path, 'nerf_fine')
+            # load_ckpt(self.nerf_fine, hparams.weight_path, 'nerf_fine')
         elif hparams.share_coarse_fine:
             pass
         
@@ -130,7 +130,7 @@ class NeRFSystem(LightningModule):
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
-                          shuffle=True, # TODO FIX back to True
+                          shuffle=False, # TODO FIX back to True
                           num_workers=4,
                           batch_size=self.hparams.batch_size,
                           pin_memory=True)
