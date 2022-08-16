@@ -17,7 +17,7 @@ freespace_weight: 0.1
 truncation_weight: 0.1
 val_check_interval: 0.005
 max_val_images: 10
-N_emb_dir: 10
-N_emb_xyz: 10
+N_emb_dir: 4
+N_emb_xyz: 8
 share_coarse_fine: True
 omni_dir: False
