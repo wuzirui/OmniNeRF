@@ -62,6 +62,7 @@ def get_opts():
                         help='scheduler type',
                         choices=['steplr', 'cosine', 'poly', 'exp'])
     parser.add_argument('--val_check_interval', type=float, default=0.5)
+    parser.add_argument('--no_shuffle', default=False, action='store_true')
     #### params for warmup, only applied when optimizer == 'sgd' or 'adam'
     parser.add_argument('--warmup_multiplier', type=float, default=1.0,
                         help='lr is multiplied by this factor after --warmup_epochs')

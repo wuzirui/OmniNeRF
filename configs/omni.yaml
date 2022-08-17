@@ -1,0 +1,24 @@
+dataset_name: rgbd
+N_samples: 512
+N_importance: 128
+img_wh: [160, 120]
+num_epochs: 5
+batch_size: 1024
+optimizer: adam
+lr: 5e-4
+lr_scheduler: exp
+decay_gamma: 0.9999
+exp_name: exp/thin_geometry/
+use_sdf: True
+color_weight: 5
+depth_weight: 0
+freespace_weight: 0.1
+truncation_weight: 0.1
+val_check_interval: 0.1
+max_val_images: 10
+N_emb_dir: 8
+N_emb_xyz: 8
+share_coarse_fine: True
+omni_dir: True
+pose_gt: True
+perturb: 0

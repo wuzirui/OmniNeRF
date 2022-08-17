@@ -130,7 +130,7 @@ class NeRFSystem(LightningModule):
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
-                          shuffle=True, # TODO FIX back to True
+                          shuffle=not self.hparams.no_shuffle,
                           num_workers=4,
                           batch_size=self.hparams.batch_size,
                           pin_memory=True)
