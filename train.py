@@ -151,7 +151,7 @@ class NeRFSystem(LightningModule):
             rays, rgbs, depths, c2ws = batch['rays'], batch['rgbs'], batch['depths'], batch['c2ws']
             results = self(rays, c2ws, self.models['pose_corr'] if 'pose_corr' in self.models else None)
             loss, color_fine, depth_fine, fs_coarse, fs_fine, tr_coarse, \
-                tr_fine = self.loss(results, rgbs, depths)
+                tr_fine, odf_loss = self.loss(results, rgbs, depths)
 
         with torch.no_grad():
             typ = 'fine' if 'rgb_fine' in results else 'coarse'
@@ -162,10 +162,12 @@ class NeRFSystem(LightningModule):
         self.log('train/psnr_rgb', psnr_rgb, prog_bar=True)
         if self.use_sdf:
             self.log('train/color_loss_fine', color_fine, prog_bar=True)
-            self.log('train/depth_loss_fine', depth_fine)
-            self.logger.experiment.add_histogram('train/sdf_fine', results['sigmas_fine'], global_step=self.current_epoch)
+            self.log('train/depth_loss_fine', depth_fine, prog_bar=True)
+            self.logger.experiment.add_histogram('train/sdf_fine', results['sigmas_fine'], global_step=self.global_step)
+            self.logger.experiment.add_histogram('train/z_vals', results['z_vals_fine'], global_step=self.global_step)
             if self.hparams.omni_dir:
-                self.logger.experiment.add_histogram('train/corr_fine', results['corrs_fine'], global_step=self.current_epoch)
+                self.logger.experiment.add_histogram('train/corr_fine', results['corrs_fine'], global_step=self.global_step)
+                self.log('train/odf_loss', odf_loss)
             if fs_fine != -1:
                 self.log('train/freespace_loss_fine', fs_fine)
                 self.log('train/truncation_loss_fine', tr_fine)
@@ -187,7 +189,7 @@ class NeRFSystem(LightningModule):
         if self.use_sdf:
             depths = depths.squeeze() # (H*W, 1)
             results = self(rays, c2ws)
-            loss, rgb_loss, depth_loss, fs_c, fs_f, tr_c, tr_f = \
+            loss, rgb_loss, depth_loss, fs_c, fs_f, tr_c, tr_f, odf_loss = \
                 self.loss(results, rgbs, depths)
             log = {
                 'val/loss': loss,
@@ -195,6 +197,7 @@ class NeRFSystem(LightningModule):
                 'val/depth_loss': depth_loss,
                 'val/fs_loss': fs_f if fs_f != -1 else fs_c,
                 'val/tr_loss': tr_f if tr_f != -1 else tr_c,
+                'val/odf_loss': odf_loss,
             }
             predicted_sdf = results['sigmas_fine']
             index = torch.randint(0, predicted_sdf.shape[0], (1,))

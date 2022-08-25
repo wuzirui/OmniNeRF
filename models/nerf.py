@@ -65,14 +65,14 @@ class NeRF(nn.Module):
                 layer = nn.Linear(W+in_channels_xyz, W)
             else:
                 layer = nn.Linear(W, W)
-            layer = nn.Sequential(layer, nn.ReLU(True))
+            layer = nn.Sequential(layer, nn.LeakyReLU(negative_slope=0.01, inplace=True))
             setattr(self, f"xyz_encoding_{i+1}", layer)
         self.xyz_encoding_final = nn.Linear(W, W)
 
         # direction encoding layers
         self.dir_encoding = nn.Sequential(
                                 nn.Linear(W+in_channels_dir, W//2),
-                                nn.ReLU(True))
+                                nn.LeakyReLU(negative_slope=0.01, inplace=True))
 
         # output layers
         self.sigma = nn.Linear(W, 1)
@@ -81,6 +81,7 @@ class NeRF(nn.Module):
                 nn.Linear(W//2, 4),
                 nn.Sigmoid()
             )
+            self.corr_out = nn.LeakyReLU(negative_slope=1e-4, inplace=False)
         else:
             self.rgb = nn.Sequential(
                 nn.Linear(W//2, 3),
@@ -125,7 +126,7 @@ class NeRF(nn.Module):
         if self.omni_dir:
             rgb_dcorr = self.rgb_dcorr(dir_encoding)
             rgb = rgb_dcorr[:, :3]
-            dcorr = rgb_dcorr[:, 3:]
+            dcorr = self.corr_out(rgb_dcorr[:, 3:])
             if sigma_only:
                 return sigma + dcorr
             return torch.cat([rgb, sigma + dcorr, dcorr], -1)

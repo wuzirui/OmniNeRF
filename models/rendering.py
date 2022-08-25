@@ -100,6 +100,8 @@ def render_rays(models,
         assert use_sdf, "TSDF is turned off"
         # compute raw weights according to the paper
         weights = torch.sigmoid(sdf / truncation) * torch.sigmoid(-sdf / truncation)
+        if omni_dir:
+            return weights
         # if there exists multiple surface, we should only keep the first one
         # compute the zero-crossing
         signs = sdf[:, 1:] * sdf[:, :-1]

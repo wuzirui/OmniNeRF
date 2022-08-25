@@ -132,7 +132,7 @@ class RGBDDatset(Dataset):
 
             # ray format: (H * W, 8), foreach ray: 
             # origin(3), direction(3), near bound(1), far bound(1)
-            near, far = 0, 2
+            near, far = 0, 1
             self.all_rays += [torch.cat([
                 rays_o, rays_d,
                 near * torch.ones_like(rays_o[:, :1]),
