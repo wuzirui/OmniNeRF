@@ -120,11 +120,13 @@ class RGBDDatset(Dataset):
 
         self.all_rays = []
         self.index = []
-        for i in range(len(self.poses)):
-            # rays_o, rays_d = get_rays(self.directions, c2w)
+        # for i in range(len(self.poses)):
+        for i, c2w in enumerate(self.poses):
+            rays_o, rays_d = get_rays(self.directions, c2w)
+
             # in camera coordinate system
-            rays_d = self.directions.reshape(-1, 3)
-            rays_o = torch.zeros_like(rays_d)
+            # rays_d = self.directions.reshape(-1, 3)
+            # rays_o = torch.zeros_like(rays_d)
             # both (H * W, 3)
             
             # RGBD datasets are taken in spheric inward-facing manner by default

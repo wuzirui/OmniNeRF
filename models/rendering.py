@@ -139,7 +139,7 @@ def render_rays(models,
         N_rays_ = xyz.shape[0]
         xyz_ = rearrange(xyz, 'n1 n2 c -> (n1 n2) c')
         # (N_rays * N_samples_, 3)
-        c2ws = c2w_array.reshape(-1, 3, 4).expand(N_samples_, -1, 3, 4).reshape(-1, 3, 4)  # (N_rays_ * N_samples_, 3, 4)
+        # c2ws = c2w_array.reshape(-1, 3, 4).expand(N_samples_, -1, 3, 4).reshape(-1, 3, 4)  # (N_rays_ * N_samples_, 3, 4)
         frame_idx = idx.long().expand(N_samples_, -1, 1).reshape(-1)                     # (N_rays * N_samples_, )
         view_dir = kwargs.get('view_dir', rays_d).expand(N_samples_, -1, 1, 3).reshape(-1, 3)
 
@@ -147,8 +147,8 @@ def render_rays(models,
         B = xyz_.shape[0]
         out_chunks = []
 
-        xyz_ = torch.sum(xyz_[..., None, :] * c2ws[..., :3, :3], axis=-1) + c2ws[..., :3, 3]
-        view_dir = torch.sum(view_dir[..., None, :] * c2ws[..., :3, :3], axis=-1)
+        # xyz_ = torch.sum(xyz_[..., None, :] * c2ws[..., :3, :3], axis=-1) + c2ws[..., :3, 3]
+        # view_dir = torch.sum(view_dir[..., None, :] * c2ws[..., :3, :3], axis=-1)
 
         if pose_correction is not None:
             R = pose_correction.get_rotation_matrices(frame_idx)
