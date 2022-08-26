@@ -156,7 +156,7 @@ class NeRFSystem(LightningModule):
         with torch.no_grad():
             typ = 'fine' if 'rgb_fine' in results else 'coarse'
             depth_predicted = results[f'depth_{typ}'].reshape(-1, 1)
-            psnr_rgb = psnr(depth_predicted, rgbs)
+            psnr_rgb = psnr(results[f'rgb_{typ}'], rgbs)
             rmse = depth_rmse(depth_predicted, depths)
             rmse_log = depth_rmse_log(depth_predicted, depths)
             abs_rel = depth_abs_rel(depth_predicted, depths)
