@@ -155,14 +155,29 @@ class NeRFSystem(LightningModule):
 
         with torch.no_grad():
             typ = 'fine' if 'rgb_fine' in results else 'coarse'
-            psnr_rgb = psnr(results[f'rgb_{typ}'], rgbs)
+            depth_predicted = results[f'depth_{typ}'].reshape(-1, 1)
+            psnr_rgb = psnr(depth_predicted, rgbs)
+            rmse = depth_rmse(depth_predicted, depths)
+            rmse_log = depth_rmse_log(depth_predicted, depths)
+            abs_rel = depth_abs_rel(depth_predicted, depths)
+            sq_rel = depth_sq_rel(depth_predicted, depths)
+            delta_1 = depth_delta(depth_predicted, depths, 1)
+            delta_2 = depth_delta(depth_predicted, depths, 2)
+            delta_3 = depth_delta(depth_predicted, depths, 3)
 
         self.log('lr', get_learning_rate(self.optimizer), prog_bar=True)
         self.log('train/loss', loss)
-        self.log('train/psnr_rgb', psnr_rgb, prog_bar=True)
+        self.log('train/psnr', psnr_rgb, prog_bar=True)
+        self.log('train/rmse', rmse, prog_bar=True)
+        self.log('train/rmse_log', rmse_log)
+        self.log('train/abs_rel', abs_rel)
+        self.log('train/sq_rel', sq_rel)
+        self.log('train/delta_1', delta_1)
+        self.log('train/delta_2', delta_2)
+        self.log('train/delta_3', delta_3)
         if self.use_sdf:
-            self.log('train/color_loss_fine', color_fine, prog_bar=True)
-            self.log('train/depth_loss_fine', depth_fine, prog_bar=True)
+            self.log('train/color_loss_fine', color_fine)
+            self.log('train/depth_loss_fine', depth_fine)
             self.logger.experiment.add_histogram('train/sdf_fine', results['sigmas_fine'], global_step=self.global_step)
             self.logger.experiment.add_histogram('train/z_vals', results['z_vals_fine'], global_step=self.global_step)
             if self.hparams.omni_dir:
@@ -189,6 +204,15 @@ class NeRFSystem(LightningModule):
         if self.use_sdf:
             depths = depths.squeeze() # (H*W, 1)
             results = self(rays, c2ws)
+            typ = 'fine' if 'rgb_fine' in results else 'coarse'
+            depth_predicted = results[f'depth_{typ}'].reshape(-1, 1)
+            rmse = depth_rmse(depth_predicted, depths)
+            rmse_log = depth_rmse_log(depth_predicted, depths)
+            abs_rel = depth_abs_rel(depth_predicted, depths)
+            sq_rel = depth_sq_rel(depth_predicted, depths)
+            delta_1 = depth_delta(depth_predicted, depths, 1)
+            delta_2 = depth_delta(depth_predicted, depths, 2)
+            delta_3 = depth_delta(depth_predicted, depths, 3)
             loss, rgb_loss, depth_loss, fs_c, fs_f, tr_c, tr_f, odf_loss = \
                 self.loss(results, rgbs, depths)
             log = {
@@ -198,6 +222,13 @@ class NeRFSystem(LightningModule):
                 'val/fs_loss': fs_f if fs_f != -1 else fs_c,
                 'val/tr_loss': tr_f if tr_f != -1 else tr_c,
                 'val/odf_loss': odf_loss,
+                'val/rmse': rmse,
+                'val/rmse_log': rmse_log,
+                'val/abs_rel': abs_rel,
+                'val/sq_rel': sq_rel,
+                'val/delta_1': delta_1,
+                'val/delta_2': delta_2,
+                'val/delta_3': delta_3,
             }
             predicted_sdf = results['sigmas_fine']
             index = torch.randint(0, predicted_sdf.shape[0], (1,))
