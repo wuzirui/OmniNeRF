@@ -117,7 +117,7 @@ class NeRFSystem(LightningModule):
         else:
             self.train_dataset = dataset(split='train', **kwargs)
             self.val_dataset = dataset(split='val', max_val_imgs=max_val_images,**kwargs)
-        if not hparams.pose_gt:
+        if not self.hparams.pose_gt:
             self.pose_corr = PoseCorrection(len(self.train_dataset))
             self.models['pose_corr'] = self.pose_corr
 
