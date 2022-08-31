@@ -198,7 +198,7 @@ class NeRFSystem(LightningModule):
         if self.use_sdf:
             rays, rgbs, depths, c2ws = batch['rays'], batch['rgbs'], batch['depths'], batch['c2ws']
         else:
-            rays, rgbs, depths = batch['rays'], batch['rgbs'], batch['depths']
+            rays, rgbs, depths, c2ws = batch['rays'], batch['rgbs'], batch['depths'], batch['c2ws']
         rays = rays.squeeze() # (H*W, 3)
         rgbs = rgbs.squeeze() # (H*W, 3)
         if self.use_sdf:
