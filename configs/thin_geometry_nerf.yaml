@@ -2,7 +2,7 @@ dataset_name: rgbd
 root_dir: /share/jshe2377/neural_rgbd_data/thin_geometry
 N_samples: 512
 N_importance: 128
-img_wh: [80, 80]
+img_wh: [160, 120]
 num_epochs: 14
 batch_size: 200
 optimizer: adam
@@ -15,3 +15,13 @@ max_val_images: 8
 
 
 
+python train.py \
+  --dataset_name rgbd \
+  --root_dir /share/jshe2377/neural_rgbd_data/thin_geometry \
+  --N_importance 64 --noise_std 0 \
+  --num_epochs 16 \
+  --optimizer adam --lr 5e-4 \
+  --lr_scheduler steplr \
+  --decay_step 2 4 8 \
+  --decay_gamma 0.5 \
+  --exp_name exp    --num_gpus 3

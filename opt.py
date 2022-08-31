@@ -12,7 +12,7 @@ def get_opts():
     parser.add_argument('--dataset_name', type=str, default='rgbd',
                         choices=['blender', 'llff', 'rgbd'],
                         help='which dataset to train/val')
-    parser.add_argument('--img_wh', nargs="+", type=int, default=[80, 80],
+    parser.add_argument('--img_wh', nargs="+", type=int, default=[160, 120],
                         help='resolution (img_w, img_h) of the image')
     parser.add_argument('--spheric_poses', default=False, action="store_true",
                         help='whether images are taken in spheric poses (for llff)')
@@ -34,7 +34,7 @@ def get_opts():
     parser.add_argument('--noise_std', type=float, default=1.0,
                         help='std dev of noise added to regularize sigma')
         
-    parser.add_argument('--batch_size', type=int, default=200,
+    parser.add_argument('--batch_size', type=int, default=1024,
                         help='batch size')
     parser.add_argument('--chunk', type=int, default=32*1024,
                         help='chunk size to split the input to avoid OOM')
