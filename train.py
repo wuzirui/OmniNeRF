@@ -144,7 +144,7 @@ class NeRFSystem(LightningModule):
 
     def training_step(self, batch, batch_nb):
         if not self.use_sdf:
-            rays, rgbs, c2ws = batch['rays'], batch['rgbs'], batch['c2ws']
+            rays, rgbs, depth, c2ws = batch['rays'], batch['rgbs'], batch['depths'], batch['c2ws']
             results = self(rays, c2ws, self.models['pose_corr'])
             loss = self.loss(results, rgbs)
         else:
@@ -198,7 +198,7 @@ class NeRFSystem(LightningModule):
         if self.use_sdf:
             rays, rgbs, depths, c2ws = batch['rays'], batch['rgbs'], batch['depths'], batch['c2ws']
         else:
-            rays, rgbs = batch['rays'], batch['rgbs']
+            rays, rgbs, depths = batch['rays'], batch['rgbs'], batch['depths']
         rays = rays.squeeze() # (H*W, 3)
         rgbs = rgbs.squeeze() # (H*W, 3)
         if self.use_sdf:
@@ -242,8 +242,27 @@ class NeRFSystem(LightningModule):
             if self.hparams.omni_dir:
                 self.logger.experiment.add_histogram('val/corr_fine', results['corrs_fine'], global_step=self.current_epoch)
         else:
+            depths = depths.squeeze()  # (H*W, 1)
             results = self(rays)
-            log = {'val/loss': self.loss(results, rgbs)}
+            typ = 'fine' if 'rgb_fine' in results else 'coarse'
+            depth_predicted = results[f'depth_{typ}'].reshape(-1, 1)
+            rmse = depth_rmse(depth_predicted, depths)
+            rmse_log = depth_rmse_log(depth_predicted, depths)
+            abs_rel = depth_abs_rel(depth_predicted, depths)
+            sq_rel = depth_sq_rel(depth_predicted, depths)
+            delta_1 = depth_delta(depth_predicted, depths, 1)
+            delta_2 = depth_delta(depth_predicted, depths, 2)
+            delta_3 = depth_delta(depth_predicted, depths, 3)
+            log = {
+                'val/loss': self.loss(results, rgbs),
+                'val/rmse': rmse,
+                'val/rmse_log': rmse_log,
+                'val/abs_rel': abs_rel,
+                'val/sq_rel': sq_rel,
+                'val/delta_1': delta_1,
+                'val/delta_2': delta_2,
+                'val/delta_3': delta_3,
+            }
 
         typ = 'fine' if 'rgb_fine' in results else 'coarse'
 
