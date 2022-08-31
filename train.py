@@ -254,7 +254,7 @@ class NeRFSystem(LightningModule):
             delta_2 = depth_delta(depth_predicted, depths, 2)
             delta_3 = depth_delta(depth_predicted, depths, 3)
             log = {
-                'val/loss': self.loss(results[f'rgb_{typ}'], rgbs),
+                'val/loss': self.loss(results, rgbs),
                 'val/rmse': rmse,
                 'val/rmse_log': rmse_log,
                 'val/abs_rel': abs_rel,
