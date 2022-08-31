@@ -82,17 +82,25 @@ class ODFLoss(nn.Module):
 class RGBDLoss(nn.Module):
     def __init__(self, color_coef=0.1, depth_coef=0.1, freespace_weight=10, truncation_weight=6000, truncation=0.05, odf_coef=1e-4, omni_dir=False):
         super().__init__()
-        self.rgb_loss = ColorLoss()
-        self.depth_loss = DepthLoss()
-        self.sdf_loss = SDFLoss(truncation, omni_dir)
-        self.odf_loss = ODFLoss()
-        self.color_coef = color_coef
-        self.depth_coef = depth_coef
-        self.odf_coef = odf_coef
-        self.freespace_weight = freespace_weight
-        self.truncation_weight = truncation_weight
+        if color_coef == 1:
+            self.color = True
+            self.rgb_loss = ColorLoss()
+        else:
+            self.color = False
+            self.rgb_loss = ColorLoss()
+            self.depth_loss = DepthLoss()
+            self.sdf_loss = SDFLoss(truncation, omni_dir)
+            self.odf_loss = ODFLoss()
+            self.color_coef = color_coef
+            self.depth_coef = depth_coef
+            self.odf_coef = odf_coef
+            self.freespace_weight = freespace_weight
+            self.truncation_weight = truncation_weight
 
     def forward(self, input_result, gt_rgb, gt_depth):
+        if self.color:
+            rgb_loss = self.rgb_loss(input_result, gt_rgb)
+            return rgb_loss
         rgb_loss = self.rgb_loss(input_result, gt_rgb)
         depth_loss = self.depth_loss(input_result, gt_depth)
         fs_c, tr_c = self.sdf_loss(input_result['z_vals_coarse'],
