@@ -34,9 +34,9 @@ def get_opts():
     parser.add_argument('--noise_std', type=float, default=1.0,
                         help='std dev of noise added to regularize sigma')
         
-    parser.add_argument('--batch_size', type=int, default=512,
+    parser.add_argument('--batch_size', type=int, default=200,
                         help='batch size')
-    parser.add_argument('--chunk', type=int, default=32*512,
+    parser.add_argument('--chunk', type=int, default=32*200,
                         help='chunk size to split the input to avoid OOM')
     parser.add_argument('--num_epochs', type=int, default=14,
                         help='number of training epochs')
