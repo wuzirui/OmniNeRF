@@ -48,7 +48,7 @@ class NeRFSystem(LightningModule):
                                           hparams.omni_dir)
         else:
             self.use_sdf = False
-            self.loss = loss_dict['color'](color_coef=1)
+            self.loss = loss_dict['color']
 
         self.embedding_xyz = Embedding(hparams.N_emb_xyz)
         self.embedding_dir = Embedding(hparams.N_emb_dir)
