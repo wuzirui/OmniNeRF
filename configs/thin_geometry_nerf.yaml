@@ -2,7 +2,7 @@ dataset_name: rgbd
 root_dir: /share/jshe2377/neural_rgbd_data/thin_geometry
 N_samples: 512
 N_importance: 128
-img_wh: [80, 60]
+img_wh: [80, 80]
 num_epochs: 14
 batch_size: 200
 optimizer: adam
@@ -12,3 +12,6 @@ decay_gamma: 0.5
 exp_name: exp/thin_geometry/
 val_check_interval: 0.1
 max_val_images: 8
+
+
+
