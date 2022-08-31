@@ -144,7 +144,7 @@ class NeRFSystem(LightningModule):
 
     def training_step(self, batch, batch_nb):
         if not self.use_sdf:
-            rays, rgbs, depth, c2ws = batch['rays'], batch['rgbs'], batch['depths'], batch['c2ws']
+            rays, rgbs, depths, c2ws = batch['rays'], batch['rgbs'], batch['depths'], batch['c2ws']
             results = self(rays, c2ws, self.models['pose_corr'])
             loss = self.loss(results, rgbs)
         else:
