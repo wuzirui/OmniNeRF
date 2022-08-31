@@ -1,17 +1,18 @@
 import configargparse
+import argparse
 from xmlrpc.client import Boolean
 
 def get_opts():
-    parser = configargparse.ArgParser(config_file_parser_class=configargparse.YAMLConfigFileParser)
-    parser.add_argument('--config', is_config_file=True, help='config file path', required=True)
-
+    # parser = configargparse.ArgParser(config_file_parser_class=configargparse.YAMLConfigFileParser)
+    # parser.add_argument('--config', is_config_file=True, help='config file path', required=True)
+    parser = argparse.ArgumentParser()
     parser.add_argument('--root_dir', type=str,
                         default='/home/ubuntu/data/nerf_example_data/nerf_synthetic/lego',
                         help='root directory of dataset')
-    parser.add_argument('--dataset_name', type=str, default='blender',
+    parser.add_argument('--dataset_name', type=str, default='rgbd',
                         choices=['blender', 'llff', 'rgbd'],
                         help='which dataset to train/val')
-    parser.add_argument('--img_wh', nargs="+", type=int, default=[800, 800],
+    parser.add_argument('--img_wh', nargs="+", type=int, default=[80, 80],
                         help='resolution (img_w, img_h) of the image')
     parser.add_argument('--spheric_poses', default=False, action="store_true",
                         help='whether images are taken in spheric poses (for llff)')
@@ -22,7 +23,7 @@ def get_opts():
                         help='number of frequencies in xyz positional encoding')
     parser.add_argument('--N_emb_dir', type=int, default=4,
                         help='number of frequencies in dir positional encoding')
-    parser.add_argument('--N_samples', type=int, default=64,
+    parser.add_argument('--N_samples', type=int, default=512,
                         help='number of coarse samples')
     parser.add_argument('--N_importance', type=int, default=128,
                         help='number of additional fine samples')
@@ -33,11 +34,11 @@ def get_opts():
     parser.add_argument('--noise_std', type=float, default=1.0,
                         help='std dev of noise added to regularize sigma')
         
-    parser.add_argument('--batch_size', type=int, default=1024,
+    parser.add_argument('--batch_size', type=int, default=200,
                         help='batch size')
     parser.add_argument('--chunk', type=int, default=32*1024,
                         help='chunk size to split the input to avoid OOM')
-    parser.add_argument('--num_epochs', type=int, default=16,
+    parser.add_argument('--num_epochs', type=int, default=14,
                         help='number of training epochs')
     parser.add_argument('--num_gpus', type=int, default=1,
                         help='number of gpus')
