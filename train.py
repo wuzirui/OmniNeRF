@@ -285,9 +285,23 @@ class NeRFSystem(LightningModule):
     def validation_epoch_end(self, outputs):
         mean_loss = torch.stack([x['val/loss'] for x in outputs]).mean()
         mean_psnr = torch.stack([x['val/psnr'] for x in outputs]).mean()
+        mean_rmse = torch.stack([x['val/rmse'] for x in outputs]).mean()
+        mean_rmse_log = torch.stack([x['val/rmse_log'] for x in outputs]).mean()
+        mean_abs_rel = torch.stack([x['val/abs_rel'] for x in outputs]).mean()
+        mean_sq_rel = torch.stack([x['val/sq_rel'] for x in outputs]).mean()
+        mean_delta_1 = torch.stack([x['val/delta_1'] for x in outputs]).mean()
+        mean_delta_2 = torch.stack([x['val/delta_2'] for x in outputs]).mean()
+        mean_delta_3 = torch.stack([x['val/delta_3'] for x in outputs]).mean()
 
         self.log('val/loss', mean_loss)
         self.log('val/psnr', mean_psnr)
+        self.log('val/rmse', mean_rmse)
+        self.log('val/rmse_log', mean_rmse_log)
+        self.log('val/abs_rel', mean_abs_rel)
+        self.log('val/sq_rel', mean_sq_rel)
+        self.log('val/delta_1', mean_delta_1)
+        self.log('val/delta_2', mean_delta_2)
+        self.log('val/delta_3', mean_delta_3)
 
 
 def main(hparams):
