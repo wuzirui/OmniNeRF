@@ -243,7 +243,7 @@ class NeRFSystem(LightningModule):
                 self.logger.experiment.add_histogram('val/corr_fine', results['corrs_fine'], global_step=self.current_epoch)
         else:
             depths = depths.squeeze()  # (H*W, 1)
-            results = self(rays, c2ws)
+            results = self(rays, c2ws, self.models['pose_corr'])
             typ = 'fine' if 'rgb_fine' in results else 'coarse'
             depth_predicted = results[f'depth_{typ}'].reshape(-1, 1)
             rmse = depth_rmse(depth_predicted, depths)
